@@ -1,0 +1,43 @@
+2026-07-24 11:35:24 INFO ==================================================
+2026-07-24 11:35:24 INFO Dashboard starting
+2026-07-24 11:35:24 INFO Python: 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]
+2026-07-24 11:35:24 INFO CWD: D:\Work\Opencode analysis
+2026-07-24 11:35:24 INFO EXCEL_PATH: D:\Work\Opencode analysis\Multiple-Client-Issues-Dashboard-Tracking.xlsx
+2026-07-24 11:35:24 INFO File exists: True
+2026-07-24 11:35:24 INFO File size: 752649 bytes
+2026-07-24 11:35:24 INFO Reading sheet: FRIM
+2026-07-24 11:35:25 INFO   Raw rows: 275, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 275 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: MTIB
+2026-07-24 11:35:25 INFO   Raw rows: 93, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 93 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: MPOB
+2026-07-24 11:35:25 INFO   Raw rows: 206, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 206 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: LKTN
+2026-07-24 11:35:25 INFO   Raw rows: 188, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 188 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: LAM
+2026-07-24 11:35:25 INFO   Raw rows: 187, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 187 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: ISN
+2026-07-24 11:35:25 INFO   Raw rows: 188, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 188 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: MSN
+2026-07-24 11:35:25 INFO   Raw rows: 188, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 188 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: KTPC
+2026-07-24 11:35:25 INFO   Raw rows: 188, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 188 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: KUIPS
+2026-07-24 11:35:25 INFO   Raw rows: 188, cols: 22
+2026-07-24 11:35:25 INFO   After dropna: 188 rows, columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category']
+2026-07-24 11:35:25 INFO Reading sheet: YIPS
+2026-07-24 11:35:26 INFO   Raw rows: 0, cols: 0
+2026-07-24 11:35:26 INFO   After dropna: 0 rows, columns: ['Client']
+2026-07-24 11:35:26 INFO Concatenating 10 DataFrames
+2026-07-24 11:35:26 INFO Combined: 1701 rows
+2026-07-24 11:35:26 INFO After rename columns: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category', 'Priority', 'Ticket Created Date', 'Ticket Completed Date', 'Ticket Closed Date', 'Ticket Status', 'SLA Dateline', 'SLA Late', 'Days', 'Ageing', 'Unnamed: 17', 'Unnamed: 18', 'Unnamed: 19', 'Unnamed: 20', 'Unnamed: 21', 'Client']
+2026-07-24 11:35:26 INFO After cleanup: 1701 rows, cols: ['No', 'Ticket No', 'Task Type', 'Project', 'Company', 'Ticket Title', 'Ticket Detail', 'Ticket Category', 'Priority', 'Ticket Created Date', 'Ticket Completed Date', 'Ticket Closed Date', 'Ticket Status', 'SLA Dateline', 'SLA Late', 'Days', 'Ageing', 'Client']
+2026-07-24 11:35:26 INFO After Ticket No filter: 473 rows
+2026-07-24 11:35:26 INFO Final DataFrame: 473 rows, 20 cols

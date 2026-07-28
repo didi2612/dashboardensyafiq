@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "dashboard.py": {
+      "maxDuration": 60
+    }
+  }
+}

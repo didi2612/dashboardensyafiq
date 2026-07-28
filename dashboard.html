@@ -1,0 +1,4963 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Client Issues Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0e1117;color:#e0e0e0;padding:20px}
+h1{color:#fff;font-size:24px;margin-bottom:4px}
+.caption{color:#888;font-size:13px;margin-bottom:20px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:#1a1d23;border-radius:8px;align-items:end}
+.control-group{display:flex;flex-direction:column;gap:4px}
+.control-group label{font-size:12px;color:#888}
+.control-group select,.control-group input{padding:6px 10px;border:1px solid #333;border-radius:4px;background:#262a30;color:#e0e0e0;font-size:13px;min-width:140px}
+.control-group input[type=text]{min-width:180px}
+.tabs{display:flex;gap:2px;margin-bottom:16px;flex-wrap:wrap}
+.tab-btn{padding:8px 16px;background:#1a1d23;border:none;color:#888;cursor:pointer;border-radius:4px 4px 0 0;font-size:13px}
+.tab-btn.active{background:#2ecc71;color:#000;font-weight:600}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+.metrics{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.metric-card{flex:1;min-width:140px;padding:16px;background:#1a1d23;border-radius:8px;text-align:center}
+.metric-card .val{font-size:28px;font-weight:700;color:#fff}
+.metric-card .lbl{font-size:12px;color:#888;margin-top:4px}
+.chart-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.chart-box{flex:1;min-width:300px;background:#1a1d23;border-radius:8px;padding:12px}
+.chart-box h3{font-size:14px;margin-bottom:8px;color:#ccc}
+.chart-full{background:#1a1d23;border-radius:8px;padding:12px;margin-bottom:16px}
+.chart-full h3{font-size:14px;margin-bottom:8px;color:#ccc}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #2a2d33}
+th{background:#262a30;color:#aaa;font-weight:600;position:sticky;top:0}
+td{color:#e0e0e0}
+.client-section{margin-bottom:20px;background:#1a1d23;border-radius:8px;padding:12px}
+.client-section h4{font-size:15px;margin-bottom:8px;color:#2ecc71}
+.data-table-wrap{max-height:400px;overflow:auto;margin-top:8px}
+#searchResult{margin-bottom:12px;padding:8px 12px;background:#1a1d23;border-radius:4px;font-size:13px;color:#888}
+</style>
+</head>
+<body>
+
+<h1>Client Issues Dashboard</h1>
+<div class="caption">Static Dashboard &mdash; Data dikemas kini: 24-07-2026 14:54</div>
+
+<div class="controls" id="filters">
+  <div class="control-group">
+    <label>Tarikh Mula</label>
+    <input type="date" id="dateStart">
+  </div>
+  <div class="control-group">
+    <label>Tarikh Akhir</label>
+    <input type="date" id="dateEnd">
+  </div>
+  <div class="control-group">
+    <label>Client</label>
+    <select id="filterClient" multiple size="4"></select>
+  </div>
+  <div class="control-group">
+    <label>Priority</label>
+    <select id="filterPriority" multiple size="4"></select>
+  </div>
+  <div class="control-group">
+    <label>Status</label>
+    <select id="filterStatus" multiple size="4"></select>
+  </div>
+  <div class="control-group">
+    <label>Carian</label>
+    <input type="text" id="searchText" placeholder="Cari tiket...">
+  </div>
+</div>
+
+<div class="tabs" id="tabs"></div>
+<div id="tabContent"></div>
+
+<script>
+var DATA = {
+  "total_records": 473,
+  "total_clients": 9,
+  "status_counts": {
+    "Closed": 283,
+    "Pending": 114,
+    "Completed": 63,
+    "In Progress": 13
+  },
+  "pending": 114,
+  "in_progress": 13,
+  "completed": 346,
+  "sla_breach": -6776,
+  "clients": [
+    "FRIM",
+    "ISN",
+    "KTPC",
+    "KUIPS",
+    "LAM",
+    "LKTN",
+    "MPOB",
+    "MSN",
+    "MTIB"
+  ],
+  "client_counts": {
+    "MPOB": 206,
+    "FRIM": 104,
+    "MTIB": 52,
+    "KUIPS": 32,
+    "ISN": 25,
+    "LAM": 21,
+    "LKTN": 15,
+    "MSN": 9,
+    "KTPC": 9
+  },
+  "ageing_data": {
+    "FRIM": {
+      "1-30 Days": 7,
+      "31-60 Days": 6,
+      "> 60 Days": 17,
+      "Jumlah": 30
+    },
+    "ISN": {
+      "1-30 Days": 6,
+      "31-60 Days": 1,
+      "> 60 Days": 2,
+      "Jumlah": 9
+    },
+    "KUIPS": {
+      "1-30 Days": 23,
+      "31-60 Days": 0,
+      "> 60 Days": 0,
+      "Jumlah": 23
+    },
+    "LAM": {
+      "1-30 Days": 1,
+      "31-60 Days": 2,
+      "> 60 Days": 1,
+      "Jumlah": 4
+    },
+    "LKTN": {
+      "1-30 Days": 2,
+      "31-60 Days": 2,
+      "> 60 Days": 0,
+      "Jumlah": 4
+    },
+    "MPOB": {
+      "1-30 Days": 0,
+      "31-60 Days": 11,
+      "> 60 Days": 26,
+      "Jumlah": 37
+    },
+    "MSN": {
+      "1-30 Days": 0,
+      "31-60 Days": 0,
+      "> 60 Days": 3,
+      "Jumlah": 3
+    },
+    "MTIB": {
+      "1-30 Days": 2,
+      "31-60 Days": 6,
+      "> 60 Days": 7,
+      "Jumlah": 15
+    }
+  },
+  "age_order": [
+    "1-30 Days",
+    "31-60 Days",
+    "> 60 Days"
+  ],
+  "age_colors": {
+    "1-30 Days": "#2ecc71",
+    "31-60 Days": "#e67e22",
+    "> 60 Days": "#e74c3c"
+  },
+  "priority_order": [
+    "Medium"
+  ],
+  "priority_data": {
+    "FRIM": {
+      "Medium": 104
+    },
+    "ISN": {
+      "Medium": 25
+    },
+    "KTPC": {
+      "Medium": 9
+    },
+    "KUIPS": {
+      "Medium": 32
+    },
+    "LAM": {
+      "Medium": 21
+    },
+    "LKTN": {
+      "Medium": 15
+    },
+    "MPOB": {
+      "Medium": 206
+    },
+    "MSN": {
+      "Medium": 9
+    },
+    "MTIB": {
+      "Medium": 52
+    }
+  },
+  "timeline_data": {
+    "2025-07": 3,
+    "2025-08": 1,
+    "2025-10": 1,
+    "2025-11": 3,
+    "2025-12": 13,
+    "2026-01": 10,
+    "2026-02": 13,
+    "2026-03": 195,
+    "2026-04": 101,
+    "2026-05": 56,
+    "2026-06": 77
+  },
+  "sla_data": {
+    "FRIM": {
+      "Total": 104,
+      "Breach": -1784,
+      "Compliant": 1888,
+      "Rate": 1815.4
+    },
+    "ISN": {
+      "Total": 25,
+      "Breach": -280,
+      "Compliant": 305,
+      "Rate": 1220.0
+    },
+    "KTPC": {
+      "Total": 9,
+      "Breach": 0,
+      "Compliant": 9,
+      "Rate": 100.0
+    },
+    "KUIPS": {
+      "Total": 32,
+      "Breach": -444,
+      "Compliant": 476,
+      "Rate": 1487.5
+    },
+    "LAM": {
+      "Total": 21,
+      "Breach": -180,
+      "Compliant": 201,
+      "Rate": 957.1
+    },
+    "LKTN": {
+      "Total": 15,
+      "Breach": -127,
+      "Compliant": 142,
+      "Rate": 946.7
+    },
+    "MPOB": {
+      "Total": 206,
+      "Breach": -2428,
+      "Compliant": 2634,
+      "Rate": 1278.6
+    },
+    "MSN": {
+      "Total": 9,
+      "Breach": -374,
+      "Compliant": 383,
+      "Rate": 4255.6
+    },
+    "MTIB": {
+      "Total": 52,
+      "Breach": -1159,
+      "Compliant": 1211,
+      "Rate": 2328.8
+    }
+  },
+  "tickets": [
+    {
+      "Ticket No": "T/2026/00056",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Inventory"
+    },
+    {
+      "Ticket No": "T/2026/00057",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Inventory"
+    },
+    {
+      "Ticket No": "T/2026/00058",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Query"
+    },
+    {
+      "Ticket No": "T/2026/00059",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00060",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00061",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00062",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Inventory"
+    },
+    {
+      "Ticket No": "T/2026/00063",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Inventory"
+    },
+    {
+      "Ticket No": "T/2026/00064",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00065",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Proses pindahan baki GL"
+    },
+    {
+      "Ticket No": "T/2026/00066",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Inventory"
+    },
+    {
+      "Ticket No": "T/2026/00067",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AR inbois"
+    },
+    {
+      "Ticket No": "T/2026/00068",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AR resit"
+    },
+    {
+      "Ticket No": "T/2026/00069",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AR resit"
+    },
+    {
+      "Ticket No": "T/2026/00070",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AR resit"
+    },
+    {
+      "Ticket No": "T/2026/00071",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pesanan Belian"
+    },
+    {
+      "Ticket No": "T/2026/00072",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Resit"
+    },
+    {
+      "Ticket No": "T/2026/00073",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AR resit"
+    },
+    {
+      "Ticket No": "T/2026/00074",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AR resit"
+    },
+    {
+      "Ticket No": "T/2026/00075",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00076",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Resit"
+    },
+    {
+      "Ticket No": "T/2026/00077",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Loan"
+    },
+    {
+      "Ticket No": "T/2026/00078",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Perolehan"
+    },
+    {
+      "Ticket No": "T/2026/00079",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Inventory"
+    },
+    {
+      "Ticket No": "T/2026/00080",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Loan"
+    },
+    {
+      "Ticket No": "T/2026/00081",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Inventory"
+    },
+    {
+      "Ticket No": "T/2026/00082",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "W2523"
+    },
+    {
+      "Ticket No": "T/2026/00083",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RESIT"
+    },
+    {
+      "Ticket No": "T/2026/00084",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TRIAL BALANCE"
+    },
+    {
+      "Ticket No": "T/2026/00085",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "PESANAN BELIAN"
+    },
+    {
+      "Ticket No": "T/2026/00086",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "DAFTAR BIL"
+    },
+    {
+      "Ticket No": "T/2026/00087",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "VIRTUAL ACCOUNT"
+    },
+    {
+      "Ticket No": "T/2026/00088",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERMOHONAN PINJAMAN KENDERAAN"
+    },
+    {
+      "Ticket No": "T/2026/00089",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "EMEL NOTIFIKASI"
+    },
+    {
+      "Ticket No": "T/2026/00090",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PESANAN BELIAN"
+    },
+    {
+      "Ticket No": "T/2026/00091",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERMOHONAN PINJAMAN"
+    },
+    {
+      "Ticket No": "T/2026/00092",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "PERTUKARAN EMEL"
+    },
+    {
+      "Ticket No": "T/2026/00093",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "JUMLAH BAYARAN DALAM MYQUERY"
+    },
+    {
+      "Ticket No": "T/2026/00095",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "ITEM JENIS BUKU"
+    },
+    {
+      "Ticket No": "T/2026/00096",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "DOUBLE PENGIRAAN"
+    },
+    {
+      "Ticket No": "T/2026/00097",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "CETAKAN BAUCAR"
+    },
+    {
+      "Ticket No": "T/2026/00098",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "CATATAN PERMOHONAN"
+    },
+    {
+      "Ticket No": "T/2026/00099",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "ITEM URUSNIAGA"
+    },
+    {
+      "Ticket No": "T/2026/00100",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MAKLUMAT NOMBOR ASET"
+    },
+    {
+      "Ticket No": "T/2026/00101",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PELAPORAN"
+    },
+    {
+      "Ticket No": "T/2026/00102",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "MODUL PERBELANJAAN IKUT PUSAT KOS"
+    },
+    {
+      "Ticket No": "T/2026/00103",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "NOTA 01 - LAPORAN PENYATA PENYESUAIAN BANK"
+    },
+    {
+      "Ticket No": "T/2026/00104",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MODUL KEMASKINI ASET"
+    },
+    {
+      "Ticket No": "T/2026/00105",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MELULUSKAN PENDAFTARAN PEMBEKAL"
+    },
+    {
+      "Ticket No": "T/2026/00106",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MODUL KONFIGURASI CAPAIAN PENGGUNA"
+    },
+    {
+      "Ticket No": "T/2026/00107",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RESIT"
+    },
+    {
+      "Ticket No": "T/2026/00108",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "KOD BIDANG"
+    },
+    {
+      "Ticket No": "T/2026/00109",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PENAMBAHAN NAMA ADMIN"
+    },
+    {
+      "Ticket No": "T/2026/00110",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "SUB MODUL SEMAKAN PERMOHONAN"
+    },
+    {
+      "Ticket No": "T/2026/00111",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MAKLUMAT PENJAMIN KEDUA"
+    },
+    {
+      "Ticket No": "T/2026/00112",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "TIADA BUTANG UPLOAD"
+    },
+    {
+      "Ticket No": "T/2026/00113",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MYFINANCIAL"
+    },
+    {
+      "Ticket No": "T/2026/00114",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "AKSES POSTING GAJI"
+    },
+    {
+      "Ticket No": "T/2026/00115",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "ADUAN 2021 (CREATE SEMULA 2025)"
+    },
+    {
+      "Ticket No": "T/2026/00116",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AKESE MYLOAN"
+    },
+    {
+      "Ticket No": "T/2026/00117",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "NOTIFIKASI EMEL"
+    },
+    {
+      "Ticket No": "T/2026/00118",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERMOHONAN PINJAMAN"
+    },
+    {
+      "Ticket No": "T/2026/00122",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "PERMOHONAN BARU PEROLEHAN"
+    },
+    {
+      "Ticket No": "T/2026/00125",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "JURNAL SAMA"
+    },
+    {
+      "Ticket No": "T/2026/00133",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PENGESAHAN PENJAMIN"
+    },
+    {
+      "Ticket No": "T/2026/00136",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RESIT BERULANG"
+    },
+    {
+      "Ticket No": "T/2026/00137",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "KOD 62510"
+    },
+    {
+      "Ticket No": "T/2026/00139",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "SERVER ERROR"
+    },
+    {
+      "Ticket No": "T/2026/00240",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "W2531"
+    },
+    {
+      "Ticket No": "T/2026/00242",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pendaftaran user Myasset"
+    },
+    {
+      "Ticket No": "T/2026/00255",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "pembekal tidak boleh kemaskini rekod"
+    },
+    {
+      "Ticket No": "T/2026/00256",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Daftar bil"
+    },
+    {
+      "Ticket No": "T/2026/00257",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PINDAHAN BAKI AWAL 2026"
+    },
+    {
+      "Ticket No": "T/2026/00264",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Permohonan Myloan"
+    },
+    {
+      "Ticket No": "T/2026/00268",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "borang pembiayaan dan perjanjian"
+    },
+    {
+      "Ticket No": "T/2026/00271",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "baucer no tnt260141"
+    },
+    {
+      "Ticket No": "T/2026/00285",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Baki 63104 tidak sama"
+    },
+    {
+      "Ticket No": "T/2026/00286",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "semakan resit f26000015 & f26000017"
+    },
+    {
+      "Ticket No": "T/2026/00302",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "63101 baki akhir 2025 tidak sama baki awal 2026"
+    },
+    {
+      "Ticket No": "T/2026/00305",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RESIT"
+    },
+    {
+      "Ticket No": "T/2026/00306",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "BATCH"
+    },
+    {
+      "Ticket No": "T/2026/00311",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "BAKI LEJAR 65101"
+    },
+    {
+      "Ticket No": "T/2026/00312",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Y2500018 telah pos mohon hapus di tab belum pos"
+    },
+    {
+      "Ticket No": "T/2026/00313",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "BAUCAR"
+    },
+    {
+      "Ticket No": "T/2026/00314",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "Pengaktifan modul konfigurasi capaian pengguna MyAsset"
+    },
+    {
+      "Ticket No": "T/2026/00315",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "PENYATA PENYESUAIAN BANK"
+    },
+    {
+      "Ticket No": "T/2026/00316",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "status permohonan pengeluaran item (26-04031) masuk ke email saya"
+    },
+    {
+      "Ticket No": "T/2026/00327",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "modul permohonan pelupusan aset"
+    },
+    {
+      "Ticket No": "T/2026/00328",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "label aset tidak boleh di print"
+    },
+    {
+      "Ticket No": "T/2026/00330",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "TIADA BIL SEMASA MEMBUAT RESIT"
+    },
+    {
+      "Ticket No": "T/2026/00336",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Pendaftaran Syarikat"
+    },
+    {
+      "Ticket No": "T/2026/00353",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "syarikat juga tidak dapat upload dokumen"
+    },
+    {
+      "Ticket No": "T/2026/00362",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "SEMAKAN PENDAFTARAN ONLINE"
+    },
+    {
+      "Ticket No": "T/2026/00363",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "FORMAT LAPORAN DOCUMENT DETAILS FORMAT 2"
+    },
+    {
+      "Ticket No": "T/2026/00369",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "BIL TIDAK DIPAPARKAN"
+    },
+    {
+      "Ticket No": "T/2026/00374",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "RESIT F26000494"
+    },
+    {
+      "Ticket No": "T/2026/00378",
+      "Client": "FRIM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "maritime waterfront suites sdn bhd id: 201001015855 kemaskini gagal di peringkat perolehan"
+    },
+    {
+      "Ticket No": "T/2026/00379",
+      "Client": "FRIM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "berkaitan info bayaran"
+    },
+    {
+      "Ticket No": "T/2026/00380",
+      "Client": "FRIM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "pemohon mohd erwan bin mohd (no. gaji 2127)"
+    },
+    {
+      "Ticket No": "T/2026/00383",
+      "Client": "FRIM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "SEMAK DAFTAR BIL"
+    },
+    {
+      "Ticket No": "T/2026/00435",
+      "Client": "FRIM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "semakan bil uf26/000551 & uf26/000555"
+    },
+    {
+      "Ticket No": "T/2026/00436",
+      "Client": "FRIM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "semakan n25/000541 dan cn25/000541"
+    },
+    {
+      "Ticket No": "T/2026/00446",
+      "Client": "FRIM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "SERAHAN ASET"
+    },
+    {
+      "Ticket No": "T/2026/00457",
+      "Client": "FRIM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "INVENTORY"
+    },
+    {
+      "Ticket No": "T/2025/00181",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Nama bank tidak tertera pada LPO"
+    },
+    {
+      "Ticket No": "T/2025/00182",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Tidak terima notifikasi melalui emel"
+    },
+    {
+      "Ticket No": "T/2025/00183",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Tidak boleh print baucar BCOWS0725/00181"
+    },
+    {
+      "Ticket No": "T/2025/00185",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Kelulusan baucar bayaran perlahan"
+    },
+    {
+      "Ticket No": "T/2025/00188",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Dua baucar bayaran terdapat dalam sistem MyFinancial"
+    },
+    {
+      "Ticket No": "T/2025/00193",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Tidak dapat 'simpan' untuk kedua-dua MyFinancial web dan client (lampiran)"
+    },
+    {
+      "Ticket No": "T/2025/00195",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "nan",
+      "Ticket Title": "Penambahbaikan laporan"
+    },
+    {
+      "Ticket No": "T/2025/00197",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Masalah Pentadbir Tidak Boleh Buat Cetakan Perjanjian dan Cetakan Permohonan"
+    },
+    {
+      "Ticket No": "T/2025/00198",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Pentadbir Nor Atikah Tidak boleh hapus permohonan"
+    },
+    {
+      "Ticket No": "T/2025/00199",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Format Tarikh diseragamkan kepada \"DD/MM/YYYY\" untuk Tarikh Awal dan Tarikh Akhir beserta Paparan Masa"
+    },
+    {
+      "Ticket No": "T/2025/00200",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Permohonan komputer tak perlu penjamin. Hanya ada saksi sahaja."
+    },
+    {
+      "Ticket No": "T/2025/00201",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pelaksanaan dan Pengaktifan SSPA Fasa 2"
+    },
+    {
+      "Ticket No": "T/2025/00202",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "TIDAK BOLEH MEMBUAT PERCETAKAN"
+    },
+    {
+      "Ticket No": "T/2026/00001",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Tidak dapat membuat percetakan"
+    },
+    {
+      "Ticket No": "T/2026/00002",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PENYELENGGARAAN MYCLAIM"
+    },
+    {
+      "Ticket No": "T/2026/00003",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Tidak dapat notifikasi emel"
+    },
+    {
+      "Ticket No": "T/2026/00007",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Laporan Jadual Pembayaran tidak boleh dijana"
+    },
+    {
+      "Ticket No": "T/2026/00008",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Ralat untuk forgot password"
+    },
+    {
+      "Ticket No": "T/2026/00012",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TIDAK BOLEH ISI KERJA LEBIH MASA (OT)"
+    },
+    {
+      "Ticket No": "T/2026/00013",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AKSES MYFINANCIAL CLIENT"
+    },
+    {
+      "Ticket No": "T/2026/00015",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Tidak boleh akses MyClaim"
+    },
+    {
+      "Ticket No": "T/2026/00018",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pembetulan amaun pada daftar bil - pada Koding AKB ("
+    },
+    {
+      "Ticket No": "T/2026/00020",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "EMEL NOTIFIKASI MYFINANCIAL TIDAK BERFUNGSI"
+    },
+    {
+      "Ticket No": "T/2026/00022",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "SKRIN KELABU"
+    },
+    {
+      "Ticket No": "T/2026/00053",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERMOHONAN PERUBATAN"
+    },
+    {
+      "Ticket No": "T/2026/00054",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERMOHONAN AM/ PERUBATAN"
+    },
+    {
+      "Ticket No": "T/2026/00055",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LAPORAN JANUARI DAN FEBRUARI 2026"
+    },
+    {
+      "Ticket No": "T/2026/00094",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "LAPORAN KIRA-KIRA KENA BAYAR (TELAH POS)"
+    },
+    {
+      "Ticket No": "T/2026/00135",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akses sebagai admin"
+    },
+    {
+      "Ticket No": "T/2026/00220",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ID PENGGUNA DISEKAT"
+    },
+    {
+      "Ticket No": "T/2026/00232",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Masalah Tidak Boleh Buat 'Lupa Kata Laluan'"
+    },
+    {
+      "Ticket No": "T/2026/00282",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MYLOAN"
+    },
+    {
+      "Ticket No": "T/2026/00283",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Kesalahan pada No. RO"
+    },
+    {
+      "Ticket No": "T/2026/00291",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ADUAN MYLOAN"
+    },
+    {
+      "Ticket No": "T/2026/00298",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "ISU NOMBOR AKAUN TIDAK KELUAR"
+    },
+    {
+      "Ticket No": "T/2026/00299",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Penambahbaikan kadar elaun perjalanan di dalam sistem Myclaim"
+    },
+    {
+      "Ticket No": "T/2026/00309",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "Kelulusan dalam sistem MyFinancial online untuk proses baucar slow loading (sila rujuk kes sebelumnya yang telah selesai)"
+    },
+    {
+      "Ticket No": "T/2026/00320",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Penambahan akses di MyFinancial Client"
+    },
+    {
+      "Ticket No": "T/2026/00324",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Tidak dapat reset password"
+    },
+    {
+      "Ticket No": "T/2026/00332",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "TIDAK DAPAT BUAT PENGESAHAN"
+    },
+    {
+      "Ticket No": "T/2026/00337",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "CREATE ACCOUNT MYFINANCIAL CLIENT"
+    },
+    {
+      "Ticket No": "T/2026/00354",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "ADUAN MYINVESTMENT"
+    },
+    {
+      "Ticket No": "T/2026/00355",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "AKSES MYFINANCIAL"
+    },
+    {
+      "Ticket No": "T/2026/00356",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Aduan Myloan"
+    },
+    {
+      "Ticket No": "T/2026/00358",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ADUAN MYFINANCIAL"
+    },
+    {
+      "Ticket No": "T/2026/00367",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Aduan MyFinancial"
+    },
+    {
+      "Ticket No": "T/2026/00372",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Aduan MyFinancial"
+    },
+    {
+      "Ticket No": "T/2026/00430",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Isu MyFinancial"
+    },
+    {
+      "Ticket No": "T/2026/00443",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "ISU MYLOAN"
+    },
+    {
+      "Ticket No": "T/2026/00445",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "Isu MyFinancial"
+    },
+    {
+      "Ticket No": "T/2026/00448",
+      "Client": "MTIB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Isu MyPayroll"
+    },
+    {
+      "Ticket No": "T/2026/00451",
+      "Client": "MTIB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "ISU MYFINANCIAL"
+    },
+    {
+      "Ticket No": "T/2026/00025",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun Belum Bayar"
+    },
+    {
+      "Ticket No": "T/2026/00026",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00027",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Project costing"
+    },
+    {
+      "Ticket No": "T/2026/00028",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00029",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procument"
+    },
+    {
+      "Ticket No": "T/2026/00030",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00031",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procument"
+    },
+    {
+      "Ticket No": "T/2026/00032",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00033",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pendaftaran aset"
+    },
+    {
+      "Ticket No": "T/2026/00034",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procument"
+    },
+    {
+      "Ticket No": "T/2026/00035",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procument"
+    },
+    {
+      "Ticket No": "T/2026/00036",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Purchase order"
+    },
+    {
+      "Ticket No": "T/2026/00037",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pesanan Belian"
+    },
+    {
+      "Ticket No": "T/2026/00038",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "EFT"
+    },
+    {
+      "Ticket No": "T/2026/00039",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Projek kod"
+    },
+    {
+      "Ticket No": "T/2026/00040",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00042",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00044",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00045",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procument"
+    },
+    {
+      "Ticket No": "T/2026/00046",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00047",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procument"
+    },
+    {
+      "Ticket No": "T/2026/00048",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Buku Tunai"
+    },
+    {
+      "Ticket No": "T/2026/00049",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00050",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun belum bayar"
+    },
+    {
+      "Ticket No": "T/2026/00126",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00127",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00128",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00129",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00130",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00131",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00132",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00140",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "BIL"
+    },
+    {
+      "Ticket No": "T/2026/00141",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "rujukan no invois"
+    },
+    {
+      "Ticket No": "T/2026/00142",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "senarai pendaftaran aset"
+    },
+    {
+      "Ticket No": "T/2026/00143",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "perakuan"
+    },
+    {
+      "Ticket No": "T/2026/00144",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "refund"
+    },
+    {
+      "Ticket No": "T/2026/00145",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Resit"
+    },
+    {
+      "Ticket No": "T/2026/00146",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "amaun negatif"
+    },
+    {
+      "Ticket No": "T/2026/00147",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Penyediaan Jurnal"
+    },
+    {
+      "Ticket No": "T/2026/00148",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "hapuskan pr"
+    },
+    {
+      "Ticket No": "T/2026/00149",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Invoice Voucher"
+    },
+    {
+      "Ticket No": "T/2026/00150",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Pengesahan"
+    },
+    {
+      "Ticket No": "T/2026/00151",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "kod P60SOIL01B1435701"
+    },
+    {
+      "Ticket No": "T/2026/00152",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Reset Password"
+    },
+    {
+      "Ticket No": "T/2026/00153",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "no perakuan prinsip"
+    },
+    {
+      "Ticket No": "T/2026/00154",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Daftar bil invois"
+    },
+    {
+      "Ticket No": "T/2026/00155",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Access Procurement"
+    },
+    {
+      "Ticket No": "T/2026/00156",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun Belum Bayar"
+    },
+    {
+      "Ticket No": "T/2026/00157",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "duplicate pendaftaran"
+    },
+    {
+      "Ticket No": "T/2026/00158",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "pengesahan penerimaan"
+    },
+    {
+      "Ticket No": "T/2026/00159",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Edit Nama"
+    },
+    {
+      "Ticket No": "T/2026/00160",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Pendaftaran Aset"
+    },
+    {
+      "Ticket No": "T/2026/00161",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Akaun Belum Bayar"
+    },
+    {
+      "Ticket No": "T/2026/00162",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Ro"
+    },
+    {
+      "Ticket No": "T/2026/00163",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PO"
+    },
+    {
+      "Ticket No": "T/2026/00164",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "pengesah untuk daftar bil"
+    },
+    {
+      "Ticket No": "T/2026/00165",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PO"
+    },
+    {
+      "Ticket No": "T/2026/00166",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pesanan Belian"
+    },
+    {
+      "Ticket No": "T/2026/00167",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Pendaftaran Aset"
+    },
+    {
+      "Ticket No": "T/2026/00168",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "ABT"
+    },
+    {
+      "Ticket No": "T/2026/00169",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ABT"
+    },
+    {
+      "Ticket No": "T/2026/00170",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "EFT"
+    },
+    {
+      "Ticket No": "T/2026/00171",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "BAJET PROJECT 31 JAN 2026"
+    },
+    {
+      "Ticket No": "T/2026/00172",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "laporan penyata pemiutang"
+    },
+    {
+      "Ticket No": "T/2026/00173",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "paparan harga"
+    },
+    {
+      "Ticket No": "T/2026/00174",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "INPOB/0126/01710"
+    },
+    {
+      "Ticket No": "T/2026/00175",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LPO"
+    },
+    {
+      "Ticket No": "T/2026/00176",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Akaun Belum Bayar"
+    },
+    {
+      "Ticket No": "T/2026/00177",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Akaun Belum Bayar"
+    },
+    {
+      "Ticket No": "T/2026/00178",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "borang prestasi pembekal"
+    },
+    {
+      "Ticket No": "T/2026/00179",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "dokumen sebut harga"
+    },
+    {
+      "Ticket No": "T/2026/00180",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Resit"
+    },
+    {
+      "Ticket No": "T/2026/00181",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "nama pengesah baru"
+    },
+    {
+      "Ticket No": "T/2026/00182",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "baucar"
+    },
+    {
+      "Ticket No": "T/2026/00183",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "R260287 n R260288"
+    },
+    {
+      "Ticket No": "T/2026/00184",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "inbois"
+    },
+    {
+      "Ticket No": "T/2026/00185",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ubah no. PIC"
+    },
+    {
+      "Ticket No": "T/2026/00186",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "amaun in RM after converted"
+    },
+    {
+      "Ticket No": "T/2026/00187",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "pesanan belian"
+    },
+    {
+      "Ticket No": "T/2026/00188",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Batch inbois hilang"
+    },
+    {
+      "Ticket No": "T/2026/00189",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "createkn semula eft"
+    },
+    {
+      "Ticket No": "T/2026/00190",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LPO"
+    },
+    {
+      "Ticket No": "T/2026/00191",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Total tak sama"
+    },
+    {
+      "Ticket No": "T/2026/00192",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ketua seksyen unit kewangan"
+    },
+    {
+      "Ticket No": "T/2026/00193",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "penyata penghutang ABT"
+    },
+    {
+      "Ticket No": "T/2026/00194",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "baucar"
+    },
+    {
+      "Ticket No": "T/2026/00195",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "resit"
+    },
+    {
+      "Ticket No": "T/2026/00196",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pertukaran penyemak"
+    },
+    {
+      "Ticket No": "T/2026/00197",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "kod B0299100"
+    },
+    {
+      "Ticket No": "T/2026/00198",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "pelupusan"
+    },
+    {
+      "Ticket No": "T/2026/00199",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "dftr bil"
+    },
+    {
+      "Ticket No": "T/2026/00200",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "invois"
+    },
+    {
+      "Ticket No": "T/2026/00201",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "pesanan belian"
+    },
+    {
+      "Ticket No": "T/2026/00202",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PO"
+    },
+    {
+      "Ticket No": "T/2026/00203",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Resit"
+    },
+    {
+      "Ticket No": "T/2026/00204",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "pesanan belian"
+    },
+    {
+      "Ticket No": "T/2026/00205",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "invois"
+    },
+    {
+      "Ticket No": "T/2026/00206",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "No. bil"
+    },
+    {
+      "Ticket No": "T/2026/00207",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "baucer"
+    },
+    {
+      "Ticket No": "T/2026/00208",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "pelulus"
+    },
+    {
+      "Ticket No": "T/2026/00209",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LPO"
+    },
+    {
+      "Ticket No": "T/2026/00210",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "invoice"
+    },
+    {
+      "Ticket No": "T/2026/00211",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "resit"
+    },
+    {
+      "Ticket No": "T/2026/00212",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "daftar bil"
+    },
+    {
+      "Ticket No": "T/2026/00213",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "aset bernilai rendah"
+    },
+    {
+      "Ticket No": "T/2026/00214",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RO"
+    },
+    {
+      "Ticket No": "T/2026/00215",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "baucar"
+    },
+    {
+      "Ticket No": "T/2026/00216",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "no baucar"
+    },
+    {
+      "Ticket No": "T/2026/00217",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "no baucar"
+    },
+    {
+      "Ticket No": "T/2026/00218",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LPO"
+    },
+    {
+      "Ticket No": "T/2026/00219",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Baucer"
+    },
+    {
+      "Ticket No": "T/2026/00221",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Pertukaran Nama PIC Untuk Pengesahan Perolehan"
+    },
+    {
+      "Ticket No": "T/2026/00222",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Nama Pemohon dan Pelulus Salah"
+    },
+    {
+      "Ticket No": "T/2026/00223",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "voucher tak boleh pos dalam pengesahan"
+    },
+    {
+      "Ticket No": "T/2026/00224",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Isu berkaitan pembelian terus"
+    },
+    {
+      "Ticket No": "T/2026/00225",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Tukarkan Ke Nama Pn. Rahayu Kamaruddin"
+    },
+    {
+      "Ticket No": "T/2026/00226",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Button Papar Tidak Appear Pada Sub Modul Laporan"
+    },
+    {
+      "Ticket No": "T/2026/00227",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "penyata penghutang tak appear"
+    },
+    {
+      "Ticket No": "T/2026/00228",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "BIL TAK APPEAR SEMASA BUAT NOTA KREDIT"
+    },
+    {
+      "Ticket No": "T/2026/00229",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "NO. BIL TAK KELUAR UNTUK BUAT RESIT"
+    },
+    {
+      "Ticket No": "T/2026/00230",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "NAMA SYARIKAT BERBEZA DENGAN NAMA SYARIKAT DI PO"
+    },
+    {
+      "Ticket No": "T/2026/00231",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TIDAK BOLEH JANA BAGI PEMILIHAN PEMBEKALAN"
+    },
+    {
+      "Ticket No": "T/2026/00233",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PEMILIHAN SYARIKAT DI MODUL PEMBELIAN TERUS"
+    },
+    {
+      "Ticket No": "T/2026/00234",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "KOD AKAUN TIDAK DAPAT DI EDIT"
+    },
+    {
+      "Ticket No": "T/2026/00235",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "PENGESAHAN RESIT MAKLUMAT BIL DAN AMAUN TIDAK APPEAR"
+    },
+    {
+      "Ticket No": "T/2026/00236",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LEJAR AM-JURNAL-POS"
+    },
+    {
+      "Ticket No": "T/2026/00239",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "PENYATA PINJAMAN INDIVIDU 31/12/2025 TIDAK DIKEMASKINI OLEH SISTEM"
+    },
+    {
+      "Ticket No": "T/2026/00243",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "SEMAKAN BAGI NO BIL : BILFMDD/0524/00015"
+    },
+    {
+      "Ticket No": "T/2026/00244",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "AUTO JURNAL PADA MODUL LEJAR UNTUK APA?"
+    },
+    {
+      "Ticket No": "T/2026/00246",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Maklumat Syarikat Bayaran Pendaftaran Tidak Boleh Di Update"
+    },
+    {
+      "Ticket No": "T/2026/00247",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "SISTEM LAMBAT (STUCK)"
+    },
+    {
+      "Ticket No": "T/2026/00248",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "REFUND"
+    },
+    {
+      "Ticket No": "T/2026/00249",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "REFUND"
+    },
+    {
+      "Ticket No": "T/2026/00250",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "DATA SALAH & TIDAK APPEAR DI NEXT STEP"
+    },
+    {
+      "Ticket No": "T/2026/00251",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "CRNFMDD/1025/00140 - CURRENCY USD PADA LEJAR"
+    },
+    {
+      "Ticket No": "T/2026/00252",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "NO PRINSIP TIDAK KELUAR - 008698"
+    },
+    {
+      "Ticket No": "T/2026/00253",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERTUKARAN NAMA SEMAKAN BAJET"
+    },
+    {
+      "Ticket No": "T/2026/00254",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "FIGURE TAK SAMA PADA PESANAN BELIAN"
+    },
+    {
+      "Ticket No": "T/2026/00258",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "CARIAN PO TIDAK DAPAT DIBUAT SEMASA KEY IN INBOIS"
+    },
+    {
+      "Ticket No": "T/2026/00259",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "NO. PO TIDAK TERTERA DI DAFTAR BIL"
+    },
+    {
+      "Ticket No": "T/2026/00261",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Kategori Pembekal & Nama Pembekal hilang di daftar bil INPOB/0326/04437 yang telah diluluskan"
+    },
+    {
+      "Ticket No": "T/2026/00262",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Modul- Inbois- Tarikh Pesanan tidak tertera di daftar bil"
+    },
+    {
+      "Ticket No": "T/2026/00263",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "GL KOD TIADA DALAM PAPARAN (DR. )"
+    },
+    {
+      "Ticket No": "T/2026/00265",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "NO PRINSIP TIDAK KELUAR - NO 007420"
+    },
+    {
+      "Ticket No": "T/2026/00266",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "NAK BUAT PO TETAPI NO KELULUSAN TAK KELUAR - NO. R260594"
+    },
+    {
+      "Ticket No": "T/2026/00269",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "JANAAN KOD TIDAK KELUAR"
+    },
+    {
+      "Ticket No": "T/2026/00274",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "KESILAPAN KIRAAN PADA JUMLAH BAUCAR"
+    },
+    {
+      "Ticket No": "T/2026/00276",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MYPROCUREMENT"
+    },
+    {
+      "Ticket No": "T/2026/00277",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PEMILIHAN PEMBEKAL - KESILAPAN PADA PENYOKONG"
+    },
+    {
+      "Ticket No": "T/2026/00278",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "No. Po tiada di paparan daftar bil INPOB/0426/06108"
+    },
+    {
+      "Ticket No": "T/2026/00281",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "CRNFMDD/1225/00055 RALAT"
+    },
+    {
+      "Ticket No": "T/2026/00284",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RCPFMDD/0226/01621"
+    },
+    {
+      "Ticket No": "T/2026/00287",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "No. Daftar Bil INPOB/0326/04437 tidak dijumpai semasa proses penyediaan baucer bayaran"
+    },
+    {
+      "Ticket No": "T/2026/00288",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "Carian DO tidak boleh dipilih semasa proses Daftar Bil ( ada keluar error)- DataTables warning: table id=findLOforInvoiceTable - Requested unknown parameter '3' for row 7. For more information about this error, please see http://datatables.net/tn/4"
+    },
+    {
+      "Ticket No": "T/2026/00289",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "Bantuan MuatNaik Dokumen Invois bagi Daftar Bil INPOB/0426/06442"
+    },
+    {
+      "Ticket No": "T/2026/00290",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Bantuan MuatNaik Dokumen Invois bagi Daftar Bil INPOB/0426/06442 User: Norasma No. Hp: 0125985540"
+    },
+    {
+      "Ticket No": "T/2026/00294",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "SISTEM MY VENDOR"
+    },
+    {
+      "Ticket No": "T/2026/00295",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Up Semula PO bagi Bayaran Berperingkat -LPO/BSRD0501/0825/00081"
+    },
+    {
+      "Ticket No": "T/2026/00296",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERTUKARAN KAEDAH PEROLEHAN DARIPADA RUNDINGAN TERUS KEPADA PEMBELIAN TERUS"
+    },
+    {
+      "Ticket No": "T/2026/00297",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "SENARAI RUNDINGAN TERUS DIDAPATI HILANG DALAM BOX STATUS 'TELAH DILULUSKAN'"
+    },
+    {
+      "Ticket No": "T/2026/00301",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PENUKARAN NAMA PENYEMAK BAJET KELULUSAN PRINSIP"
+    },
+    {
+      "Ticket No": "T/2026/00303",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MAKLUMAT DAFTAR PEMBEKAL"
+    },
+    {
+      "Ticket No": "T/2026/00308",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "MODUL PELUPUSAN ASET"
+    },
+    {
+      "Ticket No": "T/2026/00310",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TIADA NO PRINSIP (009589) SEMASA PEMILIHAN PELAWAAN"
+    },
+    {
+      "Ticket No": "T/2026/00318",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TIADA NO PRINSIP (009618) UNTUK PELAWAAN SEBUT HARGA"
+    },
+    {
+      "Ticket No": "T/2026/00319",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "No. Daftar Bil- INPOB/0426/05960 hilang dari sistem pohon tindakan segera"
+    },
+    {
+      "Ticket No": "T/2026/00322",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "SUPPLIER TAK BOLEH UPLOAD DOKUMEN SEBUT HARGA DI MY VENDOR"
+    },
+    {
+      "Ticket No": "T/2026/00326",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "HILANG PELULUS DALAM DAFTAR BIL"
+    },
+    {
+      "Ticket No": "T/2026/00333",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Baucer Bayaran Gagal Disimpan"
+    },
+    {
+      "Ticket No": "T/2026/00338",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "SALAH KOD AKAUN DI BAUCAR"
+    },
+    {
+      "Ticket No": "T/2026/00339",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Baucer No VOPOB/0326/09760"
+    },
+    {
+      "Ticket No": "T/2026/00341",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "INPOB/326/05312"
+    },
+    {
+      "Ticket No": "T/2026/00342",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "INPOB/0226/02914"
+    },
+    {
+      "Ticket No": "T/2026/00343",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "VOPOB/0426/11754"
+    },
+    {
+      "Ticket No": "T/2026/00344",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "BAUCER PERLU BATAL"
+    },
+    {
+      "Ticket No": "T/2026/00345",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "No. Daftar Bil tiada dalam maklumat carian semasa proses penyediaan baucer bayaran"
+    },
+    {
+      "Ticket No": "T/2026/00346",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "BAUCER PERLU DIBATAL"
+    },
+    {
+      "Ticket No": "T/2026/00348",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "DAFTAR BIL PERLU BATAL"
+    },
+    {
+      "Ticket No": "T/2026/00349",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "TIADA NO PRINSIP ( 009221) UNTUK PELAWAAN."
+    },
+    {
+      "Ticket No": "T/2026/00350",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "URGENT : BATAL PADA PEMILIHAN PEMBEKAL - 009780"
+    },
+    {
+      "Ticket No": "T/2026/00352",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "MASALAH PADA PO"
+    },
+    {
+      "Ticket No": "T/2026/00357",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "modul pengeluaran stok antara stor"
+    },
+    {
+      "Ticket No": "T/2026/00359",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "BAYARAN & PO"
+    },
+    {
+      "Ticket No": "T/2026/00360",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "PENGESAHAN PENERIMAAN"
+    },
+    {
+      "Ticket No": "T/2026/00361",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "DAFTAR BIL PERLU BATAL TETAPI TIDAK WUJUD DALAM SISTEM"
+    },
+    {
+      "Ticket No": "T/2026/00364",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "URGENT - MAKLUMAT PADA PO TIDAK KELUAR."
+    },
+    {
+      "Ticket No": "T/2026/00365",
+      "Client": "MPOB",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "TAK DAPAT ACCESS UNTUK DAFTAR ASSET"
+    },
+    {
+      "Ticket No": "T/2026/00366",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "PO & BAYARAN"
+    },
+    {
+      "Ticket No": "T/2026/00368",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "JURNAL TIDAK 'APPEAR' DI 'SEMAKAN JURNAL'"
+    },
+    {
+      "Ticket No": "T/2026/00371",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Daftar Bil INPOB/0526/07953 hilang tiada dalam sistem semasa penyediaan baucer bayaran"
+    },
+    {
+      "Ticket No": "T/2026/00376",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "URGENT : PEMIUTANG TIDAK BOLEH DIJANA"
+    },
+    {
+      "Ticket No": "T/2026/00377",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LPO HILANG LEPAS SAVE"
+    },
+    {
+      "Ticket No": "T/2026/00381",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Maklumat tak keluar pada tab pemilihan pembekal di myprocurement selepas disimpan."
+    },
+    {
+      "Ticket No": "T/2026/00421",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "URGENT - TUKAR PELULUS NO PRINSIP 007460"
+    },
+    {
+      "Ticket No": "T/2026/00422",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "NO. PRINSIP 005442"
+    },
+    {
+      "Ticket No": "T/2026/00423",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ID PEMBEKAL TAK ADA - S00008241 - LIAN LEY HARDWARE TRADING SDN BHD"
+    },
+    {
+      "Ticket No": "T/2026/00426",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "nan",
+      "Ticket Title": "Penukaran Status Aset"
+    },
+    {
+      "Ticket No": "T/2026/00427",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "BAUCER TIDAK APPEAR DI SKRIN PENGESAHAN"
+    },
+    {
+      "Ticket No": "T/2026/00429",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "URGENT: BAUCAR TIDAK APPEAR DI BUTTON KELULUSAN BAUCAR"
+    },
+    {
+      "Ticket No": "T/2026/00433",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "ID PEMBEKAL TAK ADA - S00008358 - PRO SERVICES SDN BHD"
+    },
+    {
+      "Ticket No": "T/2026/00434",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "ID PEMBEKAL TAK ADA - S00007768 - GERHARDT MALAYSIA SDN BHD"
+    },
+    {
+      "Ticket No": "T/2026/00442",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "SISTEM SALAH PILIH NAMA PENGESAH UNTUK PO"
+    },
+    {
+      "Ticket No": "T/2026/00444",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "LPO/AOTD0401/0626/00046 - TUKAR NAMA PENGESAHAN"
+    },
+    {
+      "Ticket No": "T/2026/00447",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "status staff tidak aktif, sistem tidak dapat dibuka"
+    },
+    {
+      "Ticket No": "T/2026/00449",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "KATEGORI KOD PEMIUTANG PADA PEMILIHAN PEMBEKAL"
+    },
+    {
+      "Ticket No": "T/2026/00458",
+      "Client": "MPOB",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TIDAK BOLEH SAHKAN PADA PENDAFTARAN PEMBEKAL YANG BARU"
+    },
+    {
+      "Ticket No": "T/2026/00041",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ISU 1: TIDAK BOLEH TUKAR SAKSI KEDUA"
+    },
+    {
+      "Ticket No": "T/2026/00043",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "ISU 2: TIDAK DAPAT SIMPAN PERMOHONAN DALAM MYLOAN"
+    },
+    {
+      "Ticket No": "T/2026/00121",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MAKLUMAT KAKITANGAN TIDAK TEPAT"
+    },
+    {
+      "Ticket No": "T/2026/00272",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "MAKLUMAT PEGAWAI TIDAK TEPAT"
+    },
+    {
+      "Ticket No": "T/2026/00273",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "tempoh bayaran balik tidak dapat dipilih"
+    },
+    {
+      "Ticket No": "T/2026/00293",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "TIDAK DAPAT MEMBUAT PENGESAHAN PENERIMAAN"
+    },
+    {
+      "Ticket No": "T/2026/00300",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TIDAK DAPAT LOGIN KE MYERP"
+    },
+    {
+      "Ticket No": "T/2026/00304",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "TIDAK DAPAT MEMBUAT PEMBATAL JURNAL"
+    },
+    {
+      "Ticket No": "T/2026/00335",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Pembaikian Nama Pegawai Stor Kepada Pegawai Pelulus"
+    },
+    {
+      "Ticket No": "T/2026/00340",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERUBAHAN KADAR LOJING DAN KILOMETER DALAM SISTEM MYCLAIM"
+    },
+    {
+      "Ticket No": "T/2026/00419",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "PERBEZAAN AMAUN TUNAI DI LEJAR DAN KUNCI KIRA-KIRA"
+    },
+    {
+      "Ticket No": "T/2026/00425",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Data Pemohon Sistem Myloan Tidak Keluar"
+    },
+    {
+      "Ticket No": "T/2026/00437",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PEMOHON TIDAK DAPAT MEMBUAT PENGESAHAN PENERIMAAN"
+    },
+    {
+      "Ticket No": "T/2026/00438",
+      "Client": "LKTN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "PEKELILING MAJIKAN BIL 2 TAHUN 2026- AKTA KESELAMATAN SOSIAL PEKERJA 1969: PERLUASAN PERLINDUNGAN SKIM LINDUNG 24 JAM"
+    },
+    {
+      "Ticket No": "T/2026/00455",
+      "Client": "LKTN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "Pemohon tidak boleh memohon bagi pengeluaran stok di Stor Alat Tulis dan Memberikan akses sebagai Pegawai Stor di Stor Alat Ganti BKK"
+    },
+    {
+      "Ticket No": "T/2025/00150",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PENAMBAHAN COLUMN 'TARIKH PERMOHONAN' DI MENU"
+    },
+    {
+      "Ticket No": "T/2026/00014",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TUKAR NAMA STATUS DI MYPANJAR"
+    },
+    {
+      "Ticket No": "T/2026/00237",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RESIT DAN BIL TIDAK BOLEH DI CETAK"
+    },
+    {
+      "Ticket No": "T/2026/00241",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "BUTANG 'CETAK' TIADA PAPARAN (LAPORAN KEWANGAN)"
+    },
+    {
+      "Ticket No": "T/2026/00245",
+      "Client": "LAM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "KELUAR ERROR BILA KLIK BUTANG SIMPAN (PANJAR AM)"
+    },
+    {
+      "Ticket No": "T/2026/00267",
+      "Client": "LAM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "KELUAR ERROR APABILA BUAT PEMBATALAN"
+    },
+    {
+      "Ticket No": "T/2026/00270",
+      "Client": "LAM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "TUKAR NAMA 'PENERIMA' DI BAUCAR MYFINANCIAL SEMASA INTEGRASI DARI MYPANJAR"
+    },
+    {
+      "Ticket No": "T/2026/00275",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Kod Elaun Perjalanan di MyPayroll ada 2 kod akaun digunakan"
+    },
+    {
+      "Ticket No": "T/2026/00279",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Sistem keluar ERROR"
+    },
+    {
+      "Ticket No": "T/2026/00280",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "15/4/2026 - Sistem sangat slow dari seawal pagi digunakan"
+    },
+    {
+      "Ticket No": "T/2026/00292",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Jumlah di Lejar Am --> Jurnal tidak sama selepas di ubah"
+    },
+    {
+      "Ticket No": "T/2026/00307",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Resit bagi matawang USD"
+    },
+    {
+      "Ticket No": "T/2026/00317",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "'BATAL' DI PENGESAHAN JURNAL"
+    },
+    {
+      "Ticket No": "T/2026/00329",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "SENARAI KATEGORI PENGHUTANG"
+    },
+    {
+      "Ticket No": "T/2026/00331",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Penebusan IVR00101 dan IVR00102"
+    },
+    {
+      "Ticket No": "T/2026/00334",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Senarai aset tidak keluar"
+    },
+    {
+      "Ticket No": "T/2026/00375",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Jurnal baru tidak boleh diboleh SIMPAN, akan keluar 'Ralat, no.jurnal sudah wujud'"
+    },
+    {
+      "Ticket No": "T/2026/00420",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Tambahan bagi caruman Skim Lindung 24 Jam / Skim Kemalangan Bukan Bencana Kerja (SKBBK)"
+    },
+    {
+      "Ticket No": "T/2026/00431",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Tiada paparan bila tekan CETAK"
+    },
+    {
+      "Ticket No": "T/2026/00452",
+      "Client": "LAM",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "Tiada amaun keluar di Penyata Aliran Tunai (Laporan MPSAS) bagi tahun 2025"
+    },
+    {
+      "Ticket No": "T/2026/00456",
+      "Client": "LAM",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Masalah bila unpost dan post inbois atau baucar (Myfinancial)."
+    },
+    {
+      "Ticket No": "T/2026/00004",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Buku Tunai Nov 2025"
+    },
+    {
+      "Ticket No": "T/2026/00006",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Laporan Pesanan Belian Tertunggak"
+    },
+    {
+      "Ticket No": "T/2026/00009",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "KEMASKINI TARIKH LO0126/00022"
+    },
+    {
+      "Ticket No": "T/2026/00010",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "KEMASKINI NO. JURNAL"
+    },
+    {
+      "Ticket No": "T/2026/00011",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Mohon kemaskini baucer MYP/PAY25/00223"
+    },
+    {
+      "Ticket No": "T/2026/00016",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Error pada permohonan pengeluaran stok - Stor Suplemen"
+    },
+    {
+      "Ticket No": "T/2026/00017",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Keluarkan penama Norsakinah binti Othman di dalam Sistem Mysupport"
+    },
+    {
+      "Ticket No": "T/2026/00019",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Tambahan Button Filter Status Aset pada Laporan Senarai Aset"
+    },
+    {
+      "Ticket No": "T/2026/00021",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Nama Penerima / Syarikat tak appear dalam Laporan Butiran Lejar Am"
+    },
+    {
+      "Ticket No": "T/2026/00024",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "KEMASKINI BAUCER PS0126/00210"
+    },
+    {
+      "Ticket No": "T/2026/00138",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "LAPORAN PESANAN BELIAN TERTUNGGAK"
+    },
+    {
+      "Ticket No": "T/2026/00260",
+      "Client": "ISN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "MOHON SEMAKAN LAPORAN PENGELUARAN STOK STOR FARMASI (OKTOBER-DISEMBER 2025)"
+    },
+    {
+      "Ticket No": "T/2026/00325",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "31-60 Days",
+      "Ticket Title": "Tambah row bagi keterangan dalam cetakan baucar"
+    },
+    {
+      "Ticket No": "T/2026/00347",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Mohon tukarkan kod item PB24A menjadi PB24D"
+    },
+    {
+      "Ticket No": "T/2026/00351",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "KEMASKINI BAKI HUJUNG TAHUN KEW.PS3"
+    },
+    {
+      "Ticket No": "T/2026/00370",
+      "Client": "ISN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "STOR FARMASI- MOHON KEMASKINI CHECK & FOUND DI KEWPS.3"
+    },
+    {
+      "Ticket No": "T/2026/00373",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Modul terimaan stok (STOR ALAT TULIS)"
+    },
+    {
+      "Ticket No": "T/2026/00382",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "STOR PERUBATAN SUKAN- ERROR PADA 8 ITEM KOD P543,P544,P545,P546,P547,P548 & 478,479"
+    },
+    {
+      "Ticket No": "T/2026/00424",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "STOR PERUBATAN SUKAN- KEMASKINI BAKI AWAL DI INVENTORI STOR"
+    },
+    {
+      "Ticket No": "T/2026/00428",
+      "Client": "ISN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "KEW PA 11_PEMERIKSAAN ASET"
+    },
+    {
+      "Ticket No": "T/2026/00432",
+      "Client": "ISN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "STOR PERUBATAN SUKAN- KEMASKINI BAKI KEW-PS 3 BAGI TAHUN 2026"
+    },
+    {
+      "Ticket No": "T/2026/00450",
+      "Client": "ISN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "STOR FARMASI- MOHON KEMASKINI BAKI ITEM KOD 13B"
+    },
+    {
+      "Ticket No": "T/2026/00453",
+      "Client": "ISN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "KEW PA 11-PEMERIKSAAN ASET (PENAMBAHBAIKAN STATUS KAD KEW PA 3 & 4)"
+    },
+    {
+      "Ticket No": "T/2026/00454",
+      "Client": "ISN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "KEW PA 11_PEMERIKSAAN ASET (MOHON TAMBAH FILTER NAMA PEGAWAI SEMASA)"
+    },
+    {
+      "Ticket No": "T/2026/00459",
+      "Client": "ISN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "STOR FARMASI- TRANSAKSI NO.BPSI K07147 PADA KEWPS 8 TIDAK DAPAT DIPAPARKAN"
+    },
+    {
+      "Ticket No": "T/2025/00118",
+      "Client": "MSN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "system stor."
+    },
+    {
+      "Ticket No": "T/2025/00121",
+      "Client": "MSN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Laporan JKPAK"
+    },
+    {
+      "Ticket No": "T/2025/00124",
+      "Client": "MSN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "RALAT UNTUK PAPAR MAKLUMAT ASET TAK KETARA (HARTA INTELEK)"
+    },
+    {
+      "Ticket No": "T/2025/00126",
+      "Client": "MSN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "perbincangan tentang sistem stor"
+    },
+    {
+      "Ticket No": "T/2025/00149",
+      "Client": "MSN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "In Progress",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Penambahbaikan Sistem Stor"
+    },
+    {
+      "Ticket No": "T/2025/00189",
+      "Client": "MSN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Discussion"
+    },
+    {
+      "Ticket No": "T/2025/00194",
+      "Client": "MSN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "PENAMBAHAN"
+    },
+    {
+      "Ticket No": "T/2026/00005",
+      "Client": "MSN",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Kemaskini Senarai Nama Kakitangan MSN yang terkini di dalam kedua-dua sistem"
+    },
+    {
+      "Ticket No": "T/2026/00238",
+      "Client": "MSN",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "> 60 Days",
+      "Ticket Title": "Isu yang telah dikenalpasti di dalam Rekod Pengeluaran My Store"
+    },
+    {
+      "Ticket No": "T/2026/00051",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "user dashboard - epms"
+    },
+    {
+      "Ticket No": "T/2026/00052",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PMS Setting - Part B & C (missing value, weightage=null)"
+    },
+    {
+      "Ticket No": "T/2026/00119",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Corrective Action"
+    },
+    {
+      "Ticket No": "T/2026/00120",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Decimal Point - Scoring Part"
+    },
+    {
+      "Ticket No": "T/2026/00123",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "System Error"
+    },
+    {
+      "Ticket No": "T/2026/00124",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Admin- Enforce Rating"
+    },
+    {
+      "Ticket No": "T/2026/00134",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "Scoring - 2 decimal point"
+    },
+    {
+      "Ticket No": "T/2026/00321",
+      "Client": "KTPC",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "Searching KPI-Ibrahim 2026 - tiada rekod"
+    },
+    {
+      "Ticket No": "T/2026/00323",
+      "Client": "KTPC",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Completed",
+      "Ageing": "nan",
+      "Ticket Title": "My Performance Score 2026 di Menu Dashboard tak selari dengan pencapaian skor kpi di Menu Current"
+    },
+    {
+      "Ticket No": "T/2026/00384",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERMOHONAN PEMBELIAN"
+    },
+    {
+      "Ticket No": "T/2026/00387",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PERMOHONAN PEMBELIAN"
+    },
+    {
+      "Ticket No": "T/2026/00388",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PENGESAHAN PENERIMAAN"
+    },
+    {
+      "Ticket No": "T/2026/00390",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "KEW8"
+    },
+    {
+      "Ticket No": "T/2026/00391",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "INTEGRASI"
+    },
+    {
+      "Ticket No": "T/2026/00392",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "BELANJAWAN"
+    },
+    {
+      "Ticket No": "T/2026/00395",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "BELANJAWAN"
+    },
+    {
+      "Ticket No": "T/2026/00396",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "TATACARA PENGURUSAN ASET"
+    },
+    {
+      "Ticket No": "T/2026/00397",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "MODULE LAPORAN MYASET"
+    },
+    {
+      "Ticket No": "T/2026/00398",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "LAPORAN MYINVESTMENT"
+    },
+    {
+      "Ticket No": "T/2026/00399",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "BELANJAWAN"
+    },
+    {
+      "Ticket No": "T/2026/00400",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "GENERAL"
+    },
+    {
+      "Ticket No": "T/2026/00401",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "GENERAL"
+    },
+    {
+      "Ticket No": "T/2026/00402",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "GENERAL"
+    },
+    {
+      "Ticket No": "T/2026/00403",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "AKAUN BELUM TERIMA"
+    },
+    {
+      "Ticket No": "T/2026/00404",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "AKAUN BELUM TERIMA"
+    },
+    {
+      "Ticket No": "T/2026/00405",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "AKAUN BELUM TERIMA"
+    },
+    {
+      "Ticket No": "T/2026/00406",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "AKAUN BELUM TERIMA"
+    },
+    {
+      "Ticket No": "T/2026/00407",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "BILLPLZ - i STUDENT - MY FINANCIAL (INTEGRASI)"
+    },
+    {
+      "Ticket No": "T/2026/00408",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "AKAUN BELUM BAYAR"
+    },
+    {
+      "Ticket No": "T/2026/00409",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "AKAUN BELUM BAYAR"
+    },
+    {
+      "Ticket No": "T/2026/00410",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "AKAUN BELUM BAYAR"
+    },
+    {
+      "Ticket No": "T/2026/00411",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "PENGURUSAN TUNAI"
+    },
+    {
+      "Ticket No": "T/2026/00412",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "PENGURUSAN TUNAI"
+    },
+    {
+      "Ticket No": "T/2026/00413",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "PENGURUSAN TUNAI"
+    },
+    {
+      "Ticket No": "T/2026/00414",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "PENGURUSAN TUNAI"
+    },
+    {
+      "Ticket No": "T/2026/00415",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "PROSES BAYARAN"
+    },
+    {
+      "Ticket No": "T/2026/00416",
+      "Client": "KUIPS",
+      "Task Type": "Maintenance",
+      "Priority": "Medium",
+      "Ticket Status": "Closed",
+      "Ageing": "nan",
+      "Ticket Title": "JURNAL GAJI"
+    },
+    {
+      "Ticket No": "T/2026/00417",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "LAPORAN"
+    },
+    {
+      "Ticket No": "T/2026/00418",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "AKB"
+    },
+    {
+      "Ticket No": "T/2026/00440",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "Modul Laporan Lajer"
+    },
+    {
+      "Ticket No": "T/2026/00441",
+      "Client": "KUIPS",
+      "Task Type": "nan",
+      "Priority": "Medium",
+      "Ticket Status": "Pending",
+      "Ageing": "1-30 Days",
+      "Ticket Title": "Modul Akaun Belum Terima"
+    }
+  ],
+  "status_options": [
+    "Closed",
+    "Completed",
+    "In Progress",
+    "Pending"
+  ],
+  "priority_options": [
+    "Medium"
+  ]
+};
+
+var ageOrder = DATA.age_order;
+var ageColors = DATA.age_colors;
+
+// ---------- filters ----------
+var filters = {clients:[], priorities:[], statuses:[], search:'', dateStart:null, dateEnd:null};
+
+function populateFilterOptions() {
+  var sel = document.getElementById('filterClient');
+  DATA.clients.forEach(function(c) {
+    var o = document.createElement('option'); o.value=c; o.text=c; o.selected=true;
+    sel.appendChild(o);
+  });
+  sel = document.getElementById('filterPriority');
+  (DATA.priority_options||[]).forEach(function(p) {
+    var o = document.createElement('option'); o.value=p; o.text=p; o.selected=true;
+    sel.appendChild(o); });
+  sel = document.getElementById('filterStatus');
+  (DATA.status_options||[]).forEach(function(s) {
+    var o = document.createElement('option'); o.value=s; o.text=s; o.selected=true;
+    sel.appendChild(o); });
+}
+populateFilterOptions();
+
+function getFilteredTickets() {
+  var fs = Array.from(document.getElementById('filterClient').selectedOptions).map(function(o){return o.value;});
+  var ps = Array.from(document.getElementById('filterPriority').selectedOptions).map(function(o){return o.value;});
+  var ss = Array.from(document.getElementById('filterStatus').selectedOptions).map(function(o){return o.value;});
+  var search = document.getElementById('searchText').value.toLowerCase();
+  var ds = document.getElementById('dateStart').value;
+  var de = document.getElementById('dateEnd').value;
+  return DATA.tickets.filter(function(t) {
+    if (fs.length && fs.indexOf(t.Client)===-1) return false;
+    if (ps.length && ps.indexOf(t.Priority)===-1) return false;
+    if (ss.length && ss.indexOf(t['Ticket Status'])===-1) return false;
+    if (search) {
+      var match = (t['Ticket Title']+' '+t['Ticket No']+' '+t.Client+' '+t['Ticket Status']).toLowerCase().indexOf(search)>-1;
+      if (!match) return false;
+    }
+    // date filter not applied on ticket level (no date in tickets array)
+    return true;
+  });
+}
+
+// ---------- tab definitions ----------
+var tabDefs = [];
+
+// Tab 0: Overview
+tabDefs.push({
+  label: 'Overview',
+  render: function(tickets) {
+    var html = '<div class="metrics">';
+    html += '<div class="metric-card"><div class="val">'+DATA.total_records+'</div><div class="lbl">Jumlah Tiket</div></div>';
+    html += '<div class="metric-card"><div class="val">'+DATA.total_clients+'</div><div class="lbl">Client</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#f39c12">'+DATA.pending+'</div><div class="lbl">Menunggu</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#3498db">'+DATA.in_progress+'</div><div class="lbl">Dalam Proses</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+DATA.completed+'</div><div class="lbl">Selesai</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+DATA.sla_breach+'</div><div class="lbl">Pelanggaran SLA</div></div>';
+    html += '</div>';
+
+    html += '<div class="chart-row"><div class="chart-box"><h3>Taburan Status</h3><div id="chartStatus"></div></div>';
+    html += '<div class="chart-box"><h3>Taburan Keutamaan</h3><div id="chartPriority"></div></div></div>';
+
+    html += '<div class="chart-box"><h3>Tiket mengikut Client</h3><div id="chartClientDist"></div></div>';
+    return html;
+  },
+  afterRender: function() {
+    var labels=[], values=[], colors=[];
+    var cmap={'Completed':'#2ecc71','Closed':'#3498db','Pending':'#f39c12','In Progress':'#e74c3c'};
+    for (var k in DATA.status_counts) {
+      labels.push(k); values.push(DATA.status_counts[k]);
+      colors.push(cmap[k]||'#888'); }
+    Plotly.newPlot('chartStatus', [{labels:labels, values:values, type:'pie', marker:{colors:colors},
+      textinfo:'label+percent', textposition:'outside', hole:0.4}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, showlegend:false, margin:{t:0,b:0,l:0,r:0}},
+      {responsive:true, displayModeBar:false});
+
+    var plabels=[], pvalues=[], pcolors=[]; var pmap={'High':'#e74c3c','Medium':'#3498db','Low':'#2ecc71'};
+    if (DATA.priority_order) {
+      DATA.priority_order.forEach(function(p) {
+        var sum=0;
+        for (var c in DATA.priority_data) sum += (DATA.priority_data[c][p]||0);
+        if (sum>0) { plabels.push(p); pvalues.push(sum); pcolors.push(pmap[p]||'#888'); } }); }
+    Plotly.newPlot('chartPriority', [{labels:plabels, values:pvalues, type:'pie', marker:{colors:pcolors},
+      textinfo:'label+percent', textposition:'outside', hole:0.4}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, showlegend:false, margin:{t:0,b:0,l:0,r:0}},
+      {responsive:true, displayModeBar:false});
+
+    var clabels=[], cvalues=[];
+    for (var c in DATA.client_counts) { clabels.push(c); cvalues.push(DATA.client_counts[c]); }
+    var plotlyColors = ['#636efa','#EF553B','#00cc96','#ab63fa','#FFA15A','#19d3f3','#FF6692','#B6E880','#FF97FF','#FECB52'];
+    var ccolors = clabels.map(function(_,i){return plotlyColors[i%plotlyColors.length];});
+    Plotly.newPlot('chartClientDist', [{x:clabels, y:cvalues, type:'bar', marker:{color:ccolors},
+      text:cvalues, textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:40}},
+      {responsive:true, displayModeBar:false});
+  }
+});
+
+// Tab 1: Pecahan Status
+tabDefs.push({
+  label: 'Pecahan Status',
+  render: function() {
+    var html = '<div class="chart-row">';
+    html += '<div class="chart-box"><h3>Status Pai</h3><div id="chartStatusPie"></div></div>';
+    html += '<div class="chart-box"><h3>Status Bar</h3><div id="chartStatusBar"></div></div></div>';
+    html += '<div class="chart-full"><h3>Status mengikut Client</h3><div id="chartStatusClient"></div></div>';
+    return html;
+  },
+  afterRender: function() {
+    var labels=[], values=[], colors=[], cmap={'Completed':'#2ecc71','Closed':'#3498db','Pending':'#f39c12','In Progress':'#e74c3c'};
+    for (var k in DATA.status_counts) { labels.push(k); values.push(DATA.status_counts[k]); colors.push(cmap[k]||'#888'); }
+    Plotly.newPlot('chartStatusPie', [{labels:labels, values:values, type:'pie', marker:{colors:colors},
+      textinfo:'label+percent', textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:0,b:0,l:0,r:0}},
+      {responsive:true, displayModeBar:false});
+    Plotly.newPlot('chartStatusBar', [{x:labels, y:values, type:'bar', marker:{color:colors},
+      text:values, textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:0,b:40,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+
+    // Status by client
+    var ct = {}, cl = DATA.clients;
+    cl.forEach(function(c) { ct[c]={};
+      for (var k in DATA.status_counts) ct[c][k]=0; });
+    DATA.tickets.forEach(function(t) {
+      if (ct[t.Client] && ct[t.Client][t['Ticket Status']]!==undefined) ct[t.Client][t['Ticket Status']]++; });
+    var traces = [];
+    for (var k in DATA.status_counts) {
+      traces.push({x:cl, y:cl.map(function(c){return ct[c][k];}), name:k, type:'bar',
+        marker:{color:cmap[k]||'#888'}}); }
+    Plotly.newPlot('chartStatusClient', traces,
+      {barmode:'stack', template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+  }
+});
+
+// Tab 2: Analisis Keutamaan
+tabDefs.push({
+  label: 'Analisis Keutamaan',
+  render: function() {
+    var html = '<div class="chart-row">';
+    html += '<div class="chart-box"><h3>Keutamaan Pai</h3><div id="chartPriPie"></div></div>';
+    html += '<div class="chart-box"><h3>Keutamaan Bar</h3><div id="chartPriBar"></div></div></div>';
+    html += '<div class="chart-full"><h3>Keutamaan mengikut Client</h3><div id="chartPriClient"></div></div>';
+    return html;
+  },
+  afterRender: function() {
+    var plabels=[], pvalues=[], pcolors=[], pmap={'High':'#e74c3c','Medium':'#3498db','Low':'#2ecc71'};
+    DATA.priority_order.forEach(function(p) {
+      var sum=0;
+      for (var c in DATA.priority_data) sum += (DATA.priority_data[c][p]||0);
+      if (sum>0) { plabels.push(p); pvalues.push(sum); pcolors.push(pmap[p]||'#888'); } });
+    Plotly.newPlot('chartPriPie', [{labels:plabels, values:pvalues, type:'pie', marker:{colors:pcolors},
+      textinfo:'label+percent', textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:0,b:0,l:0,r:0}},
+      {responsive:true, displayModeBar:false});
+    Plotly.newPlot('chartPriBar', [{x:plabels, y:pvalues, type:'bar', marker:{color:pcolors},
+      text:pvalues, textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:0,b:40,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+
+    var traces = [];
+    DATA.priority_order.forEach(function(p) {
+      traces.push({x:DATA.clients, y:DATA.clients.map(function(c){return DATA.priority_data[c]?.(p)||0;}),
+        name:p, type:'bar', marker:{color:pmap[p]||'#888'}}); });
+    Plotly.newPlot('chartPriClient', traces,
+      {barmode:'stack', template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+  }
+});
+
+// Tab 3: Analisis Penuaan
+tabDefs.push({
+  label: 'Analisis Penuaan',
+  render: function() {
+    var html = '<div class="metrics"><div class="metric-card"><div class="val">'+DATA.total_records+'</div><div class="lbl">Jumlah Rekod</div></div></div>';
+    html += '<div id="ageingClients"></div>';
+    return html;
+  },
+  afterRender: function() {
+    var container = document.getElementById('ageingClients');
+    var html = '';
+    for (var ci=0; ci<DATA.clients.length; ci++) {
+      var c = DATA.clients[ci];
+      var cd = DATA.ageing_data[c];
+      if (!cd || !cd.Jumlah) continue;
+      html += '<div class="client-section"><h4>'+c+' \u2014 '+cd.Jumlah+' rekod</h4>';
+      html += '<div class="chart-row"><div class="chart-box" style="min-width:200px;flex:0.4">';
+      html += '<table><tr><th>Kumpulan Umur</th><th>Bilangan</th></tr>';
+      ageOrder.forEach(function(a) {
+        html += '<tr><td>'+a+'</td><td>'+(cd[a]||0)+'</td></tr>';
+      });
+      html += '<tr style="font-weight:700;border-top:2px solid #444"><td>Jumlah</td><td>'+cd.Jumlah+'</td></tr>';
+      html += '</table></div>';
+      html += '<div class="chart-box" style="flex:1"><div id="ageChart'+ci+'"></div></div></div></div>';
+    }
+    container.innerHTML = html;
+    for (var ci=0; ci<DATA.clients.length; ci++) {
+      var c = DATA.clients[ci];
+      var cd = DATA.ageing_data[c];
+      if (!cd || !cd.Jumlah) continue;
+      var aLabels = [], aValues = [], aColors = [];
+      ageOrder.forEach(function(a) {
+        if (cd[a]) { aLabels.push(a); aValues.push(cd[a]); aColors.push(ageColors[a]); }
+      });
+      Plotly.newPlot('ageChart'+ci, [{labels:aLabels, values:aValues, type:'pie', marker:{colors:aColors},
+        textinfo:'label+percent', textposition:'outside', hole:0.4}],
+        {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+         font:{color:'#e0e0e0'}, showlegend:false, margin:{t:0,b:0,l:0,r:0}},
+        {responsive:true, displayModeBar:false});
+    }
+  }
+});
+
+// Tab 4: Perbandingan Client
+tabDefs.push({
+  label: 'Perbandingan Client',
+  render: function() {
+    var html = '<div class="chart-row">';
+    html += '<div class="chart-box"><h3>Tiket mengikut Client</h3><div id="compClientPie"></div></div>';
+    html += '<div class="chart-box"><h3>Taburan Tiket</h3><div id="compClientBar"></div></div></div>';
+    html += '<div class="chart-full"><h3>Ringkasan Client</h3><div class="data-table-wrap"><table id="compClientTable"><tr><th>Client</th><th>Jumlah Tiket</th>';
+    html += '<th>Menunggu</th><th>Dalam Proses</th><th>Selesai</th><th>Pelanggaran SLA</th></tr></table></div></div>';
+    return html;
+  },
+  afterRender: function() {
+    var clabels=[], cvalues=[];
+    for (var c in DATA.client_counts) { clabels.push(c); cvalues.push(DATA.client_counts[c]); }
+    Plotly.newPlot('compClientPie', [{labels:clabels, values:cvalues, type:'pie',
+      textinfo:'label+percent', textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:0,b:0,l:0,r:0}},
+      {responsive:true, displayModeBar:false});
+    Plotly.newPlot('compClientBar', [{x:clabels, y:cvalues, type:'bar', marker:{color:'#2ecc71'},
+      text:cvalues, textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+
+    // Client summary table
+    var tbody = document.getElementById('compClientTable');
+    DATA.clients.forEach(function(c) {
+      var total = DATA.client_counts[c]||0;
+      var s = DATA.sla_data[c]||{};
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+c+'</td><td>'+total+'</td><td>'+DATA.pending+'</td><td>'+DATA.in_progress+'</td><td>'+DATA.completed+'</td><td>'+(s.Breach||0)+'</td>';
+      tbody.appendChild(tr);
+    });
+  }
+});
+
+// Tab 5: Aliran Masa
+tabDefs.push({
+  label: 'Aliran Masa',
+  render: function() {
+    return '<div class="chart-full"><h3>Aliran Tiket mengikut Masa</h3><div id="chartTimeline"></div></div>';
+  },
+  afterRender: function() {
+    var dates = Object.keys(DATA.timeline_data).sort();
+    var counts = dates.map(function(d){return DATA.timeline_data[d];});
+    Plotly.newPlot('chartTimeline', [{x:dates, y:counts, type:'scatter', mode:'lines+markers',
+      line:{color:'#3498db', width:2}, marker:{color:'#3498db', size:6},
+      fill:'tozeroy', fillcolor:'rgba(52,152,219,0.15)'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+  }
+});
+
+// Tab 6: Pematuhan SLA
+tabDefs.push({
+  label: 'Pematuhan SLA',
+  render: function() {
+    var html = '<div class="metrics">';
+    var totalCompliant = 0, totalBreach = 0;
+    for (var c in DATA.sla_data) { totalCompliant += DATA.sla_data[c].Compliant; totalBreach += DATA.sla_data[c].Breach; }
+    var overallRate = DATA.total_records > 0 ? Math.round((totalCompliant/DATA.total_records)*100) : 0;
+    html += '<div class="metric-card"><div class="val" style="color:'+(overallRate>=80?'#2ecc71':'#e74c3c')+'">'+overallRate+'%</div><div class="lbl">Kadar Pematuhan</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+totalCompliant+'</div><div class="lbl">Patuh SLA</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+totalBreach+'</div><div class="lbl">Pelanggaran SLA</div></div>';
+    html += '</div>';
+    html += '<div class="chart-row"><div class="chart-box"><h3>SLA oleh Client</h3><div id="chartSLA"></div></div>';
+    html += '<div class="chart-box"><h3>Kadar Pematuhan SLA</h3><div id="chartSLARate"></div></div></div>';
+    return html;
+  },
+  afterRender: function() {
+    var cl = DATA.clients.filter(function(c){return DATA.sla_data[c];});
+    var breachVals = cl.map(function(c){return DATA.sla_data[c].Breach;});
+    var complVals = cl.map(function(c){return DATA.sla_data[c].Compliant;});
+    Plotly.newPlot('chartSLA', [
+      {x:cl, y:complVals, name:'Patuh', type:'bar', marker:{color:'#2ecc71'}},
+      {x:cl, y:breachVals, name:'Langgar', type:'bar', marker:{color:'#e74c3c'}}
+    ], {barmode:'stack', template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+        font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+
+    var rates = cl.map(function(c){return DATA.sla_data[c].Rate;});
+    Plotly.newPlot('chartSLARate', [{x:cl, y:rates, type:'bar', marker:{
+      color:rates.map(function(v){
+        if (v>=80) return '#2ecc71'; if (v>=50) return '#f39c12'; return '#e74c3c';
+      })}, text:rates.map(function(v){return v+'%';}), textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, yaxis:{range:[0,100]}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+  }
+});
+
+// Tab 7: Butiran Tiket
+tabDefs.push({
+  label: 'Butiran Tiket',
+  render: function() {
+    var html = '<div id="searchResult">'+DATA.total_records+' rekod</div>';
+    html += '<div class="data-table-wrap"><table id="ticketTable"><tr><th>Tiket</th><th>Client</th><th>Task Type</th><th>Priority</th><th>Status</th><th>Ageing</th><th>Title</th></tr></table></div>';
+    return html;
+  },
+  afterRender: function() {
+    renderTickets(DATA.tickets);
+  }
+});
+
+// Tab 8: Senarai Aging
+tabDefs.push({
+  label: 'Senarai Aging',
+  render: function() {
+    var ageOrder = DATA.age_order;
+    var html = '<div id="ageingList"></div>';
+    return html;
+  },
+  afterRender: function() {
+    var container = document.getElementById('ageingList');
+    var ageOrder = DATA.age_order;
+    var tickets = DATA.tickets.filter(function(t){return t.Ageing && t.Ageing!=='nan' && t.Ageing!=='None' && t.Ageing!=='';});
+    container.innerHTML = '<div style="margin-bottom:12px;padding:8px 12px;background:#1a1d23;border-radius:4px;font-size:13px;color:#888">Jumlah tiket dengan aging: '+tickets.length+'</div>';
+    ageOrder.forEach(function(bucket) {
+      var bt = tickets.filter(function(t){return t.Ageing===bucket;});
+      if (!bt.length) return;
+      var section = document.createElement('div');
+      section.style.cssText = 'margin-bottom:16px;background:#1a1d23;border-radius:8px;padding:12px';
+      var header = document.createElement('h3');
+      header.style.cssText = 'font-size:15px;color:#e0e0e0;margin-bottom:10px';
+      header.textContent = bucket + ' \u2014 ' + bt.length + ' tiket';
+      section.appendChild(header);
+      var clients = {};
+      bt.forEach(function(t){clients[t.Client]=(clients[t.Client]||0)+1;});
+      var sortedClients = Object.keys(clients).sort();
+      sortedClients.forEach(function(c) {
+        var detail = document.createElement('details');
+        detail.style.cssText = 'margin-bottom:6px';
+        var summary = document.createElement('summary');
+        summary.style.cssText = 'cursor:pointer;padding:6px 10px;background:#262a30;border-radius:4px;font-size:13px;color:#2ecc71';
+        summary.textContent = bucket + ' / ' + c + ' (' + clients[c] + ' tiket)';
+        detail.appendChild(summary);
+        var table = document.createElement('table');
+        table.style.cssText = 'width:100%;margin-top:6px;font-size:12px';
+        table.innerHTML = '<tr><th>Ticket No</th><th>Priority</th><th>Status</th><th>Title</th></tr>';
+        bt.filter(function(t){return t.Client===c;}).forEach(function(t) {
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td>'+t['Ticket No']+'</td><td>'+t.Priority+'</td><td>'+t['Ticket Status']+'</td><td>'+t['Ticket Title']+'</td>';
+          table.appendChild(tr);
+        });
+        detail.appendChild(table);
+        section.appendChild(detail);
+      });
+      container.appendChild(section);
+    });
+  }
+});
+
+// ---------- render ----------
+function renderTickets(tickets) {
+  var tbody = document.getElementById('ticketTable');
+  while (tbody.rows.length>1) tbody.deleteRow(1);
+  tickets.forEach(function(t) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+t['Ticket No']+'</td><td>'+t.Client+'</td><td>'+t['Task Type']+'</td><td>'+t.Priority+'</td><td>'+t['Ticket Status']+'</td><td>'+t.Ageing+'</td><td>'+t['Ticket Title']+'</td>';
+    tbody.appendChild(tr);
+  });
+  document.getElementById('searchResult').textContent = tickets.length+' rekod dipaparkan';
+}
+
+function renderTab(idx) {
+  var tabs = document.querySelectorAll('.tab-btn');
+  tabs.forEach(function(b,i){b.classList.toggle('active',i===idx);});
+  var panes = document.querySelectorAll('.tab-pane');
+  panes.forEach(function(p,i){p.classList.toggle('active',i===idx);});
+  if (tabDefs[idx].afterRender) {
+    setTimeout(function(){tabDefs[idx].afterRender();}, 50);
+  }
+}
+
+function initTabs() {
+  var tabBar = document.getElementById('tabs');
+  var content = document.getElementById('tabContent');
+  tabDefs.forEach(function(def, idx) {
+    var btn = document.createElement('button');
+    btn.className = 'tab-btn'+(idx===0?' active':'');
+    btn.textContent = def.label;
+    btn.onclick = function(){renderTab(idx);};
+    tabBar.appendChild(btn);
+    var pane = document.createElement('div');
+    pane.className = 'tab-pane'+(idx===0?' active':'');
+    pane.innerHTML = def.render();
+    content.appendChild(pane);
+  });
+  renderTab(0);
+}
+
+initTabs();
+</script>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Client Issues Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#eef1f5;color:#101828;padding:20px}
+.container{max-width:1400px;margin:0 auto}
+h1{color:#101828;font-size:1.6rem;font-weight:700;margin-bottom:4px}
+.caption{color:#667085;font-size:0.9rem;margin-bottom:20px}
+
+.controls{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:#fff;border-radius:12px;border:1px solid #d0d5dd;align-items:end}
+.control-group{display:flex;flex-direction:column;gap:4px}
+.control-group label{font-size:0.75rem;color:#475467;font-weight:600}
+.control-group select,.control-group input{padding:6px 10px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#344054;font-size:13px;min-width:140px}
+.control-group input[type=text]{min-width:180px}
+.btn-filter{padding:8px 20px;background:#2ecc71;color:#fff;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;min-width:100px}
+.btn-filter:hover{background:#27ae60}
+
+.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap;background:#fff;padding:6px 8px;border-radius:12px;border:1px solid #d0d5dd}
+.tab-btn{padding:7px 16px;background:transparent;border:none;color:#667085;cursor:pointer;border-radius:8px;font-size:0.85rem;font-weight:500}
+.tab-btn.active{background:#2ecc71;color:#fff;font-weight:600}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+.metrics{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.metric-card{flex:1;min-width:140px;padding:16px 20px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.metric-card .val{font-size:1.8rem;font-weight:700;color:#101828}
+.metric-card .lbl{font-size:0.8rem;color:#475467;margin-top:2px;font-weight:500}
+
+.chart-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.chart-box{flex:1;min-width:300px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:12px;overflow:hidden}
+.chart-box h3{font-size:1.1rem;font-weight:600;color:#344054;margin-bottom:8px}
+.chart-full{background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:12px;margin-bottom:16px}
+.chart-full h3{font-size:1.1rem;font-weight:600;color:#344054;margin-bottom:8px}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e4e7ec}
+th{background:#f2f4f7;color:#475467;font-weight:600;position:sticky;top:0}
+td{color:#344054}
+.data-table-wrap{max-height:500px;overflow:auto;border:1px solid #e4e7ec;border-radius:10px}
+
+.client-section{margin-bottom:20px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:16px}
+.client-section h4{font-size:1rem;font-weight:600;color:#101828;margin-bottom:12px}
+.client-section summary{cursor:pointer;padding:8px 12px;background:#f2f4f7;border-radius:8px;font-size:0.85rem;color:#2ecc71;font-weight:600;margin-bottom:4px}
+.client-section details{margin-bottom:6px}
+
+.alert{background:#fef3f2;border:1px solid #fecdca;border-radius:10px;padding:16px;margin-bottom:16px;color:#b42318}
+.alert-warning{background:#fffaeb;border:1px solid #fedf89;color:#b54708}
+.alert-info{background:#eff8ff;border:1px solid #b2ddff;color:#175cd3}
+
+.debug-box{background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:16px;margin-bottom:16px;font-size:0.85rem}
+.debug-box summary{cursor:pointer;font-weight:600;color:#344054}
+.debug-box .content{margin-top:12px;color:#667085}
+.debug-box .content p{margin:4px 0}
+
+.sidebar-hr{margin:0.8rem 0;border:none;border-top:1px solid #d0d5dd}
+hr{border-color:#d0d5dd;margin:1.2rem 0}
+.st-alert{border-radius:10px;border:1px solid #d0d5dd}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Client Issues Dashboard</h1>
+<div class="caption">Dynamic Multi-File Issue Tracking &mdash; {{ now }}</div>
+
+<form method="GET" action="/" class="controls" id="filters">
+  {% if filter_options.min_date %}
+  <div class="control-group">
+    <label>Tarikh Mula</label>
+    <input type="date" name="date_start" value="{{ filter_options.date_start }}" min="{{ filter_options.min_date }}" max="{{ filter_options.max_date }}">
+  </div>
+  <div class="control-group">
+    <label>Tarikh Akhir</label>
+    <input type="date" name="date_end" value="{{ filter_options.date_end }}" min="{{ filter_options.min_date }}" max="{{ filter_options.max_date }}">
+  </div>
+  {% endif %}
+  {% if filter_options.source_files %}
+  <div class="control-group">
+    <label>Fail Excel (File)</label>
+    <select name="source_file" multiple size="4">
+      {% for s in filter_options.source_files %}
+      <option value="{{ s }}" {% if s in filter_options.selected_source_files %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if filter_options.clients %}
+  <div class="control-group">
+    <label>Client</label>
+    <select name="client" multiple size="4">
+      {% for c in filter_options.clients %}
+      <option value="{{ c }}" {% if c in filter_options.selected_clients %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if filter_options.priorities %}
+  <div class="control-group">
+    <label>Priority</label>
+    <select name="priority" multiple size="4">
+      {% for p in filter_options.priorities %}
+      <option value="{{ p }}" {% if p in filter_options.selected_priorities %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if filter_options.statuses %}
+  <div class="control-group">
+    <label>Status</label>
+    <select name="status" multiple size="4">
+      {% for s in filter_options.statuses %}
+      <option value="{{ s }}" {% if s in filter_options.selected_statuses %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if filter_options.task_types %}
+  <div class="control-group">
+    <label>Task Type</label>
+    <select name="task_type" multiple size="4">
+      {% for t in filter_options.task_types %}
+      <option value="{{ t }}" {% if t in filter_options.selected_task_types %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="control-group">
+    <label>Carian</label>
+    <input type="text" name="search" placeholder="Cari tiket..." value="{{ filter_options.search }}">
+  </div>
+  <div class="control-group">
+    <button type="submit" class="btn-filter">Tapis</button>
+  </div>
+</form>
+
+<details class="debug-box">
+  <summary>Debug Info</summary>
+  <div class="content">
+    <p><strong>Data directory:</strong> <code>D:\Work\Opencode analysis</code></p>
+    <p><strong>Excel files found:</strong> {{ data_info.excel_files|length }}</p>
+    {% for f in data_info.excel_files %}
+    <p>&nbsp;&nbsp;- <code>{{ f }}</code></p>
+    {% endfor %}
+    <p><strong>DataFrame shape:</strong> <code>({{ data_info.total_raw }}, {{ data_info.columns|length }})</code></p>
+    <p><strong>Columns:</strong> <code>{{ data_info.columns }}</code></p>
+    {% if data_info.source_files %}
+    <p><strong>Sources:</strong> <code>{{ data_info.source_files }}</code></p>
+    {% endif %}
+    {% if data_info.load_errors %}
+    <p style="color:#b42318"><strong>Load Errors:</strong></p>
+    {% for err in data_info.load_errors %}
+    <p>- {{ err }}</p>
+    {% endfor %}
+    {% endif %}
+  </div>
+</details>
+
+{% if not has_data %}
+<div class="alert alert-warning">Tiada data ditemui. Pastikan fail Excel berada di lokasi yang betul.</div>
+<div class="alert alert-info">Mencari fail <code>.xlsx</code> dalam: <code>D:\Work\Opencode analysis</code></div>
+{% if data_info.excel_files|length == 0 %}
+<div class="alert alert-warning">Tiada fail Excel ditemui dalam direktori ini.</div>
+{% endif %}
+{% else %}
+
+<div class="tabs" id="tabs">
+  <button class="tab-btn active" onclick="switchTab(0)">Overview</button>
+  <button class="tab-btn" onclick="switchTab(1)">Pecahan Status</button>
+  <button class="tab-btn" onclick="switchTab(2)">Analisis Keutamaan</button>
+  <button class="tab-btn" onclick="switchTab(3)">Analisis Penuaan</button>
+  <button class="tab-btn" onclick="switchTab(4)">Perbandingan Client</button>
+  <button class="tab-btn" onclick="switchTab(5)">Aliran Masa</button>
+  <button class="tab-btn" onclick="switchTab(6)">Pematuhan SLA</button>
+  <button class="tab-btn" onclick="switchTab(7)">Butiran Tiket</button>
+  <button class="tab-btn" onclick="switchTab(8)">Senarai Aging</button>
+</div>
+
+<div class="tab-content">
+
+<div class="tab-pane active" id="tab-0">
+  <div class="metrics">
+    <div class="metric-card"><div class="val">{{ overview_charts.metrics.total }}</div><div class="lbl">Jumlah Tiket</div></div>
+    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ overview_charts.metrics.completed }}</div><div class="lbl">Selesai <span style="color:#667085;font-size:0.75rem">({{ overview_charts.metrics.completed_pct }})</span></div></div>
+    <div class="metric-card"><div class="val" style="color:#f39c12">{{ overview_charts.metrics.pending }}</div><div class="lbl">Menunggu <span style="color:#667085;font-size:0.75rem">({{ overview_charts.metrics.pending_pct }})</span></div></div>
+    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ overview_charts.metrics.in_progress }}</div><div class="lbl">Dalam Proses <span style="color:#667085;font-size:0.75rem">({{ overview_charts.metrics.in_progress_pct }})</span></div></div>
+    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ overview_charts.metrics.sla_breach }}</div><div class="lbl">Pelanggaran SLA</div></div>
+    <div class="metric-card"><div class="val">{{ overview_charts.metrics.avg_days if overview_charts.metrics.avg_days else "N/A" }}</div><div class="lbl">Purata Hari Selesai</div></div>
+  </div>
+  <hr>
+  <div class="chart-row">
+    <div class="chart-box">{{ overview_charts.status_pie|safe }}</div>
+    <div class="chart-box">{{ overview_charts.priority_pie|safe }}</div>
+  </div>
+  <hr>
+  <div class="chart-full">{{ overview_charts.client_bar|safe }}</div>
+</div>
+
+<div class="tab-pane" id="tab-1">
+  <div class="chart-row">
+    <div class="chart-box">{{ status_charts.status_client_bar|safe }}</div>
+    <div class="chart-box">{{ status_charts.status_hbar|safe }}</div>
+  </div>
+  <div class="chart-full">
+    <h3>Butiran Status mengikut Client</h3>
+    <div class="data-table-wrap">{{ status_charts.status_pivot|safe }}</div>
+  </div>
+</div>
+
+<div class="tab-pane" id="tab-2">
+  <div class="chart-row">
+    <div class="chart-box">{{ priority_charts.priority_pie|safe }}</div>
+    <div class="chart-box">{{ priority_charts.priority_status_bar|safe }}</div>
+  </div>
+  <div class="chart-full">
+    <h3>Keutamaan mengikut Client</h3>
+    <div class="data-table-wrap">{{ priority_charts.priority_client_pivot|safe }}</div>
+  </div>
+</div>
+
+<div class="tab-pane" id="tab-3">
+  {% if ageing_charts.total_ageing is defined %}
+  <div class="metrics"><div class="metric-card"><div class="val">{{ ageing_charts.total_ageing }}</div><div class="lbl">Jumlah rekod penuaan</div></div></div>
+  {% endif %}
+  {% for client, data in ageing_charts.ageing_clients.items() %}
+  <div class="client-section">
+    <h4>{{ client }} &mdash; {{ data.count }} rekod</h4>
+    <div class="chart-row">
+      <div class="chart-box" style="flex:0.4;min-width:200px">
+        <table>
+          <tr><th>Kumpulan Umur</th><th>Bilangan</th></tr>
+          {% for age in ageing_charts.age_order %}
+          <tr><td>{{ age }}</td><td>{{ data.table[age] }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+      <div class="chart-box" style="flex:1">{{ data.chart|safe }}</div>
+    </div>
+  </div>
+  {% endfor %}
+  {% if ageing_charts.days_hist %}
+  <hr>
+  <div class="chart-full"><h3>Taburan Hari Terbuka (Days Open Distribution)</h3>{{ ageing_charts.days_hist|safe }}</div>
+  {% endif %}
+  {% if ageing_charts.sla_breach_bar %}
+  <div class="chart-full"><h3>Pelanggaran SLA mengikut Client</h3>{{ ageing_charts.sla_breach_bar|safe }}</div>
+  {% endif %}
+  {% if not ageing_charts.ageing_clients and not ageing_charts.days_hist %}
+  <div class="alert alert-warning">Tiada data penuaan ditemui</div>
+  {% endif %}
+</div>
+
+<div class="tab-pane" id="tab-4">
+  <div class="chart-row">
+    <div class="chart-box">{{ comparison_charts.client_total_bar|safe }}</div>
+    <div class="chart-box">{{ comparison_charts.client_status_stacked|safe }}</div>
+  </div>
+  <div class="chart-full">
+    <h3>Ringkasan Client</h3>
+    <div class="data-table-wrap">{{ comparison_charts.client_stats_table|safe }}</div>
+  </div>
+  {% if comparison_charts.client_radar %}
+  <div class="chart-full"><h3>Radar Carta: Perbandingan Client</h3>{{ comparison_charts.client_radar|safe }}</div>
+  {% endif %}
+</div>
+
+<div class="tab-pane" id="tab-5">
+  <div class="chart-row">
+    <div class="chart-box">{{ timeline_charts.timeline_created|safe }}</div>
+    <div class="chart-box">{{ timeline_charts.timeline_created_vs_completed|safe }}</div>
+  </div>
+  {% if timeline_charts.timeline_client_area %}
+  <div class="chart-full"><h3>Aliran mengikut Client</h3>{{ timeline_charts.timeline_client_area|safe }}</div>
+  {% endif %}
+  {% if timeline_charts.timeline_category %}
+  <div class="chart-full"><h3>Aliran mengikut Kategori</h3>{{ timeline_charts.timeline_category|safe }}</div>
+  {% endif %}
+</div>
+
+<div class="tab-pane" id="tab-6">
+  <div class="metrics">
+    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ sla_charts.compliance_rate }}%</div><div class="lbl">Kadar Pematuhan SLA</div></div>
+    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ sla_charts.total_breaches }}</div><div class="lbl">Pelanggaran SLA</div></div>
+    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ sla_charts.total_compliant }}</div><div class="lbl">Mematuhi SLA</div></div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">{{ sla_charts.sla_gauge|safe }}</div>
+    <div class="chart-box">{{ sla_charts.sla_client_bar|safe }}</div>
+  </div>
+  {% if sla_charts.sla_pivot %}
+  <div class="chart-full">
+    <h3>Butiran SLA mengikut Client dan Status</h3>
+    <div class="data-table-wrap">{{ sla_charts.sla_pivot|safe }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="tab-pane" id="tab-7">
+  <p style="color:#667085;margin-bottom:12px"><strong>Jumlah rekod: {{ data_info.total_filtered }}</strong></p>
+  <div class="data-table-wrap">{{ detail_table|safe }}</div>
+</div>
+
+<div class="tab-pane" id="tab-8">
+  {% if ageing_list_data.total %}
+  <p style="color:#667085;margin-bottom:12px"><strong>Jumlah tiket dengan aging: {{ ageing_list_data.total }}</strong></p>
+  {% for bucket, clients in ageing_list_data.buckets.items() %}
+  <div class="client-section">
+    <h4>{{ bucket }} &mdash; 
+      {% set ns = namespace(count=0) %}
+      {% for c, d in clients.items() %}{% set ns.count = ns.count + d.count %}{% endfor %}
+      {{ ns.count }} tiket
+    </h4>
+    {% for client, data in clients.items() %}
+    <details>
+      <summary>{{ bucket }} / {{ client }} ({{ data.count }} tiket)</summary>
+      <div class="data-table-wrap" style="max-height:400px;margin-top:8px">
+        <table>
+          <tr>
+            {% if data.rows[0] is defined %}
+            {% for key in data.rows[0].keys() %}
+            <th>{{ key }}</th>
+            {% endfor %}
+            {% endif %}
+          </tr>
+          {% for row in data.rows %}
+          <tr>
+            {% for val in row.values() %}
+            <td>{{ val }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="alert alert-warning">Tiada data aging ditemui</div>
+  {% endif %}
+</div>
+
+</div>
+{% endif %}
+</div>
+
+<script>
+function switchTab(idx) {
+  document.querySelectorAll('.tab-btn').forEach(function(b, i) {
+    b.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.tab-pane').forEach(function(p, i) {
+    p.classList.toggle('active', i === idx);
+  });
+  var charts = document.querySelectorAll('.tab-pane.active .js-plotly-plot');
+  charts.forEach(function(c) {
+    var id = c.id;
+    if (id) {
+      var gd = document.getElementById(id);
+      if (gd && gd.layout) { Plotly.Plots.resize(gd); }
+    }
+  });
+}
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    document.querySelectorAll('.js-plotly-plot').forEach(function(gd) {
+      Plotly.Plots.resize(gd);
+    });
+  }, 300);
+});
+</script>
+</body>
+</html>

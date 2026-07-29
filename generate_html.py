@@ -101,6 +101,8 @@ for fp in files:
     if 'Client Project' in xl.sheet_names:
         project_df = pd.read_excel(fp, sheet_name='Client Project', header=0, engine='openpyxl')
         project_df = project_df.dropna(how='all')
+        if 'Client' in project_df.columns:
+            project_df['Client'] = project_df['Client'].ffill()
         for c in ['Start date', 'Due date', 'Target Date']:
             if c in project_df.columns:
                 project_df[c] = pd.to_datetime(project_df[c], errors='coerce', dayfirst=True)

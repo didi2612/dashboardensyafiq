@@ -268,6 +268,8 @@ def load_project_data():
             if "Client Project" in xl.sheet_names:
                 df = pd.read_excel(fp, sheet_name="Client Project", header=0, engine="openpyxl")
                 df = df.dropna(how="all")
+                if "Client" in df.columns:
+                    df["Client"] = df["Client"].ffill()
                 for c in ["Start date", "Due date", "Target Date"]:
                     if c in df.columns:
                         df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
@@ -392,6 +394,7 @@ def build_project_charts(df):
     for c in ["Start date", "Due date", "Target Date"]:
         if c in detail.columns:
             detail[c] = detail[c].dt.strftime("%d/%m/%Y") if not detail[c].isna().all() else detail[c]
+    detail = detail.fillna("")
     charts["detail_table"] = detail.to_html(index=False)
 
     return charts

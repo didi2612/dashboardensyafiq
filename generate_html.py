@@ -1,4 +1,4 @@
-import pandas as pd, os, glob, json, base64, io
+import pandas as pd, os, glob, json, base64, io, numpy as np
 
 DATA_DIR = r'D:\Work\Opencode analysis'
 HEADER_ROW = 1
@@ -94,6 +94,52 @@ if 'Ageing' not in df.columns and 'Days' in df.columns:
 if 'SLA Breach' not in df.columns and 'SLA Late' in df.columns:
     df['SLA Breach'] = pd.to_numeric(df['SLA Late'], errors='coerce').fillna(0).astype(int)
 
+# ---- LOAD CLIENT PROJECT DATA ----
+project_df = pd.DataFrame()
+for fp in files:
+    xl = pd.ExcelFile(fp, engine='openpyxl')
+    if 'Client Project' in xl.sheet_names:
+        project_df = pd.read_excel(fp, sheet_name='Client Project', header=0, engine='openpyxl')
+        project_df = project_df.dropna(how='all')
+        for c in ['Start date', 'Due date', 'Target Date']:
+            if c in project_df.columns:
+                project_df[c] = pd.to_datetime(project_df[c], errors='coerce', dayfirst=True)
+        if 'Percentage' in project_df.columns:
+            project_df['Percentage'] = pd.to_numeric(project_df['Percentage'].astype(str).str.replace('%', ''), errors='coerce')
+        if 'Overall Progress Task (%)' in project_df.columns:
+            project_df['Overall Progress Task (%)'] = pd.to_numeric(project_df['Overall Progress Task (%)'].astype(str).str.replace('%', ''), errors='coerce')
+        break
+
+# ---- CLIENT PROJECT AGGREGATIONS ----
+project_total = len(project_df)
+project_status_counts = project_df['Status Progress'].value_counts().to_dict() if 'Status Progress' in project_df.columns else {}
+project_completed = sum(v for k,v in project_status_counts.items() if k and 'complet' in str(k).lower())
+project_in_progress = sum(v for k,v in project_status_counts.items() if k and 'progress' in str(k).lower())
+project_not_started = sum(v for k,v in project_status_counts.items() if k and 'not start' in str(k).lower())
+project_clients = sorted(project_df['Client'].dropna().unique()) if 'Client' in project_df.columns and not project_df['Client'].dropna().empty else []
+project_client_counts = project_df['Client'].dropna().value_counts().to_dict() if 'Client' in project_df.columns else {}
+
+project_progress_data = []
+if 'Title' in project_df.columns and 'Percentage' in project_df.columns:
+    pv = project_df.dropna(subset=['Percentage']).sort_values('Percentage', ascending=True)
+    for _, r in pv.iterrows():
+        project_progress_data.append({
+            'label': str(r.get('Title', '')) + ' - ' + str(r.get('Client', '')),
+            'percentage': float(r.get('Percentage', 0)),
+            'client': str(r.get('Client', '')),
+            'status': str(r.get('Status Progress', '')),
+        })
+
+project_tasks = []
+for _, r in project_df.iterrows():
+    task = {}
+    for c in ['Client', 'Title', 'Category', 'Progress', 'Priority', 'Assigned to', 'Status Progress', 'Percentage', 'Overall Progress Task (%)']:
+        val = r.get(c, '')
+        if c in ['Start date', 'Due date', 'Target Date'] and pd.notna(r.get(c)):
+            val = r[c].strftime('%d/%m/%Y') if hasattr(r[c], 'strftime') else str(r[c])
+        task[c] = str(val) if not pd.isna(val) else ''
+    project_tasks.append(task)
+
 # ---- COMPUTE AGGREGATIONS ----
 total_records = len(df)
 
@@ -173,6 +219,15 @@ data_json = json.dumps({
     'tickets': tickets_detail,
     'status_options': sorted([str(s) for s in status_counts.keys() if s]),
     'priority_options': sorted([str(p) for p in pr_order]),
+    'project_total': project_total,
+    'project_status_counts': {str(k):int(v) for k,v in project_status_counts.items()},
+    'project_completed': project_completed,
+    'project_in_progress': project_in_progress,
+    'project_not_started': project_not_started,
+    'project_clients': project_clients,
+    'project_client_counts': {str(k):int(v) for k,v in project_client_counts.items()},
+    'project_progress': project_progress_data,
+    'project_tasks': project_tasks,
 }, indent=2)
 
 # ---- GENERATE HTML ----
@@ -636,6 +691,111 @@ tabDefs.push({
         section.appendChild(detail);
       });
       container.appendChild(section);
+    });
+  }
+});
+
+// Tab 8: Client Warranty
+tabDefs.push({
+  label: 'Client Warranty',
+  render: function() {
+    var wtickets = DATA.tickets.filter(function(t){return t.Client==='Client Warranty';});
+    if (!wtickets.length) return '<div style="padding:16px;color:#888">Tiada data Warranty ditemui</div>';
+    var wTotal = wtickets.length;
+    var wCompleted = wtickets.filter(function(t){return ['Completed','Closed'].indexOf(t['Ticket Status'])>=0;}).length;
+    var wPending = wtickets.filter(function(t){return t['Ticket Status']==='Pending';}).length;
+    var wInProg = wtickets.filter(function(t){return t['Ticket Status']==='In Progress';}).length;
+    var html = '<div class="metrics">';
+    html += '<div class="metric-card"><div class="val">'+wTotal+'</div><div class="lbl">Jumlah Tiket Warranty</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+wCompleted+'</div><div class="lbl">Selesai</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#f39c12">'+wPending+'</div><div class="lbl">Menunggu</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+wInProg+'</div><div class="lbl">Dalam Proses</div></div>';
+    html += '</div>';
+    html += '<div class="chart-row"><div class="chart-box"><h3>Status Warranty</h3><div id="chartWStatus"></div></div>';
+    html += '<div class="chart-box"><h3>Task Type</h3><div id="chartWTaskType"></div></div></div>';
+    html += '<div class="chart-full"><h3>Butiran Tiket Warranty</h3><div class="data-table-wrap"><table id="warrantyTable"><tr><th>Tiket</th><th>Task Type</th><th>Project</th><th>Priority</th><th>Status</th><th>Title</th></tr></table></div></div>';
+    return html;
+  },
+  afterRender: function() {
+    var wtickets = DATA.tickets.filter(function(t){return t.Client==='Client Warranty';});
+    var labels=[], values=[], colors=[], cmap={'Completed':'#2ecc71','Closed':'#3498db','Pending':'#f39c12','In Progress':'#e74c3c'};
+    var scounts={};
+    wtickets.forEach(function(t){scounts[t['Ticket Status']]=(scounts[t['Ticket Status']]||0)+1;});
+    for (var k in scounts) { labels.push(k); values.push(scounts[k]); colors.push(cmap[k]||'#888'); }
+    Plotly.newPlot('chartWStatus', [{labels:labels, values:values, type:'pie', marker:{colors:colors},
+      textinfo:'label+percent', textposition:'outside', hole:0.4}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:0,b:0,l:0,r:0}},
+      {responsive:true, displayModeBar:false});
+    var tlabels=[], tvalues=[];
+    var tcounts={};
+    wtickets.forEach(function(t){tcounts[t['Task Type']]=(tcounts[t['Task Type']]||0)+1;});
+    for (var k in tcounts) { tlabels.push(k); tvalues.push(tcounts[k]); }
+    Plotly.newPlot('chartWTaskType', [{x:tlabels, y:tvalues, type:'bar', marker:{color:'#3498db'},
+      text:tvalues, textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+    var tbody = document.getElementById('warrantyTable');
+    wtickets.forEach(function(t) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+t['Ticket No']+'</td><td>'+t['Task Type']+'</td><td>'+(t.Project||'')+'</td><td>'+t.Priority+'</td><td>'+t['Ticket Status']+'</td><td>'+t['Ticket Title']+'</td>';
+      tbody.appendChild(tr);
+    });
+  }
+});
+
+// Tab 9: Client Project
+tabDefs.push({
+  label: 'Client Project',
+  render: function() {
+    if (!DATA.project_total) return '<div style="padding:16px;color:#888">Tiada data Projek ditemui</div>';
+    var html = '<div class="metrics">';
+    html += '<div class="metric-card"><div class="val">'+DATA.project_total+'</div><div class="lbl">Jumlah Projek</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+DATA.project_completed+'</div><div class="lbl">Selesai</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#3498db">'+DATA.project_in_progress+'</div><div class="lbl">Dalam Proses</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#95a5a6">'+DATA.project_not_started+'</div><div class="lbl">Belum Mula</div></div>';
+    html += '</div>';
+    html += '<div class="chart-row"><div class="chart-box"><h3>Projek mengikut Client</h3><div id="chartProjClient"></div></div>';
+    html += '<div class="chart-box"><h3>Status Progress</h3><div id="chartProjStatus"></div></div></div>';
+    if (DATA.project_progress && DATA.project_progress.length) {
+      html += '<div class="chart-full"><h3>Peratusan Penyelesaian</h3><div id="chartProjProgress"></div></div>';
+    }
+    html += '<div class="chart-full"><h3>Butiran Projek</h3><div class="data-table-wrap"><table id="projectTable"><tr><th>Client</th><th>Title</th><th>Category</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Percentage</th></tr></table></div></div>';
+    return html;
+  },
+  afterRender: function() {
+    var clabels=[], cvalues=[];
+    for (var c in DATA.project_client_counts) { clabels.push(c); cvalues.push(DATA.project_client_counts[c]); }
+    Plotly.newPlot('chartProjClient', [{x:clabels, y:cvalues, type:'bar', marker:{color:'#2ecc71'},
+      text:cvalues, textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:20,b:60,l:40,r:20}},
+      {responsive:true, displayModeBar:false});
+    var plabels=[], pvalues=[];
+    for (var k in DATA.project_status_counts) { plabels.push(k); pvalues.push(DATA.project_status_counts[k]); }
+    Plotly.newPlot('chartProjStatus', [{labels:plabels, values:pvalues, type:'pie', hole:0.4,
+      textinfo:'label+percent', textposition:'outside'}],
+      {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+       font:{color:'#e0e0e0'}, margin:{t:0,b:0,l:0,r:0}},
+      {responsive:true, displayModeBar:false});
+    if (DATA.project_progress && DATA.project_progress.length) {
+      var pdata = DATA.project_progress;
+      Plotly.newPlot('chartProjProgress', [{x:pdata.map(function(d){return d.percentage;}),
+        y:pdata.map(function(d){return d.label;}), type:'bar', orientation:'h',
+        marker:{color:pdata.map(function(d){
+          if (d.percentage>=80) return '#2ecc71'; if (d.percentage>=50) return '#f39c12'; return '#e74c3c';
+        })}, text:pdata.map(function(d){return d.percentage+'%';}), textposition:'outside'}],
+        {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+         font:{color:'#e0e0e0'}, xaxis:{range:[0,100]}, yaxis:{autorange:'reversed'},
+         margin:{t:20,b:40,l:200,r:40}, height:Math.max(400, 30*pdata.length)},
+        {responsive:true, displayModeBar:false});
+    }
+    var tbody = document.getElementById('projectTable');
+    DATA.project_tasks.forEach(function(t) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+t.Client+'</td><td>'+t.Title+'</td><td>'+t.Category+'</td><td>'+t.Priority+'</td><td>'+t['Assigned to']+'</td><td>'+t['Status Progress']+'</td><td>'+(t.Percentage||'')+'</td>';
+      tbody.appendChild(tr);
     });
   }
 });

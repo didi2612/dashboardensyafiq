@@ -177,6 +177,8 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   <button class="tab-btn" onclick="switchTab(6)">Pematuhan SLA</button>
   <button class="tab-btn" onclick="switchTab(7)">Butiran Tiket</button>
   <button class="tab-btn" onclick="switchTab(8)">Senarai Aging</button>
+  <button class="tab-btn" onclick="switchTab(9)">Client Warranty</button>
+  <button class="tab-btn" onclick="switchTab(10)">Client Project</button>
 </div>
 
 <div class="tab-content">
@@ -340,10 +342,56 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   {% endfor %}
   {% else %}
   <div class="alert alert-warning">Tiada data aging ditemui</div>
+{% endif %}
+</div>
+
+<div class="tab-pane" id="tab-9">
+  {% if warranty_charts and warranty_charts.metrics %}
+  <div class="metrics">
+    <div class="metric-card"><div class="val">{{ warranty_charts.metrics.total }}</div><div class="lbl">Jumlah Tiket Warranty</div></div>
+    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ warranty_charts.metrics.completed }}</div><div class="lbl">Selesai</div></div>
+    <div class="metric-card"><div class="val" style="color:#f39c12">{{ warranty_charts.metrics.pending }}</div><div class="lbl">Menunggu</div></div>
+    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ warranty_charts.metrics.in_progress }}</div><div class="lbl">Dalam Proses</div></div>
+    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ warranty_charts.metrics.sla_breach }}</div><div class="lbl">Pelanggaran SLA</div></div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">{{ warranty_charts.status_pie|safe }}</div>
+    <div class="chart-box">{{ warranty_charts.task_type_bar|safe }}</div>
+  </div>
+  <div class="chart-full">{{ warranty_charts.project_bar|safe }}</div>
+  <div class="chart-full">
+    <h3>Butiran Tiket Warranty</h3>
+    <div class="data-table-wrap">{{ warranty_charts.detail_table|safe }}</div>
+  </div>
+  {% else %}
+  <div class="alert alert-warning">Tiada data Warranty ditemui</div>
   {% endif %}
 </div>
 
+<div class="tab-pane" id="tab-10">
+  {% if has_project and project_charts and project_charts.metrics %}
+  <div class="metrics">
+    <div class="metric-card"><div class="val">{{ project_charts.metrics.total }}</div><div class="lbl">Jumlah Projek</div></div>
+    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ project_charts.metrics.completed }}</div><div class="lbl">Selesai</div></div>
+    <div class="metric-card"><div class="val" style="color:#3498db">{{ project_charts.metrics.in_progress }}</div><div class="lbl">Dalam Proses</div></div>
+    <div class="metric-card"><div class="val" style="color:#95a5a6">{{ project_charts.metrics.not_started }}</div><div class="lbl">Belum Mula</div></div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box">{{ project_charts.client_bar|safe }}</div>
+    <div class="chart-box">{{ project_charts.status_pie|safe }}</div>
+  </div>
+  {% if project_charts.progress_bar %}
+  <div class="chart-full"><h3>Peratusan Penyelesaian</h3>{{ project_charts.progress_bar|safe }}</div>
+  {% endif %}
+  <div class="chart-full">
+    <h3>Butiran Projek</h3>
+    <div class="data-table-wrap">{{ project_charts.detail_table|safe }}</div>
+  </div>
+  {% else %}
+  <div class="alert alert-warning">Tiada data Projek ditemui</div>
+  {% endif %}
 </div>
+
 {% endif %}
 </div>
 

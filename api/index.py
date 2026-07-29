@@ -260,6 +260,142 @@ def load_data():
     return df, load_errors
 
 
+def load_project_data():
+    try:
+        files = find_excel_files()
+        for fp in files:
+            xl = pd.ExcelFile(fp, engine="openpyxl")
+            if "Client Project" in xl.sheet_names:
+                df = pd.read_excel(fp, sheet_name="Client Project", header=0, engine="openpyxl")
+                df = df.dropna(how="all")
+                for c in ["Start date", "Due date", "Target Date"]:
+                    if c in df.columns:
+                        df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
+                if "Percentage" in df.columns:
+                    df["Percentage"] = pd.to_numeric(df["Percentage"].astype(str).str.replace("%", ""), errors="coerce")
+                if "Overall Progress Task (%)" in df.columns:
+                    df["Overall Progress Task (%)"] = pd.to_numeric(df["Overall Progress Task (%)"].astype(str).str.replace("%", ""), errors="coerce")
+                return df
+        return pd.DataFrame()
+    except Exception as e:
+        log(f"Error loading project data: {e}", "ERROR")
+        return pd.DataFrame()
+
+
+def build_warranty_charts(df):
+    charts = {}
+    warranty_df = df[df["Client"] == "Client Warranty"].copy() if "Client" in df.columns else pd.DataFrame()
+    if warranty_df.empty:
+        return charts
+
+    total = len(warranty_df)
+    completed = len(warranty_df[warranty_df["Ticket Status"].isin(["Completed", "Closed"])]) if "Ticket Status" in warranty_df.columns else 0
+    pending = len(warranty_df[warranty_df["Ticket Status"] == "Pending"]) if "Ticket Status" in warranty_df.columns else 0
+    in_progress = len(warranty_df[warranty_df["Ticket Status"] == "In Progress"]) if "Ticket Status" in warranty_df.columns else 0
+    sla_breach = warranty_df["SLA Breach"].sum() if "SLA Breach" in warranty_df.columns else 0
+
+    charts["metrics"] = {
+        "total": total, "completed": completed, "pending": pending,
+        "in_progress": in_progress, "sla_breach": int(sla_breach),
+        "completed_pct": f"{completed / total * 100:.1f}%" if total > 0 else "0%",
+        "pending_pct": f"{pending / total * 100:.1f}%" if total > 0 else "0%",
+        "in_progress_pct": f"{in_progress / total * 100:.1f}%" if total > 0 else "0%",
+    }
+
+    if "Ticket Status" in warranty_df.columns:
+        sc = warranty_df["Ticket Status"].value_counts().reset_index()
+        sc.columns = ["Status", "Bilangan"]
+        fig = px.pie(sc, names="Status", values="Bilangan", title="Status Tiket Warranty",
+                      color="Status", color_discrete_map=COLORS, hole=0.3)
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
+        charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+
+    if "Task Type" in warranty_df.columns:
+        tc = warranty_df["Task Type"].value_counts().reset_index()
+        tc.columns = ["Task Type", "Bilangan"]
+        fig = px.bar(tc, x="Task Type", y="Bilangan", title="Tiket Warranty mengikut Task Type",
+                      color="Task Type", text="Bilangan")
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
+        charts["task_type_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+
+    if "Project" in warranty_df.columns:
+        pc = warranty_df["Project"].value_counts().reset_index()
+        pc.columns = ["Project", "Bilangan"]
+        fig = px.bar(pc, x="Project", y="Bilangan", title="Tiket Warranty mengikut Projek",
+                      color="Project", text="Bilangan")
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
+        charts["project_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+
+    display_cols = ["Ticket No", "Task Type", "Project", "Company", "Ticket Title", "Priority", "Ticket Status", "Ticket Created Date", "Days"]
+    avail = [c for c in display_cols if c in warranty_df.columns]
+    detail = warranty_df[avail].copy()
+    if "Ticket Created Date" in detail.columns:
+        detail["Ticket Created Date"] = detail["Ticket Created Date"].dt.strftime("%d/%m/%Y")
+    charts["detail_table"] = detail.to_html(index=False)
+
+    return charts
+
+
+def build_project_charts(df):
+    charts = {}
+    if df.empty:
+        return charts
+
+    total = len(df)
+    completed = len(df[df["Status Progress"].str.lower().str.contains("completed", na=False)]) if "Status Progress" in df.columns else 0
+    in_progress = len(df[df["Status Progress"].str.lower().str.contains("progress", na=False)]) if "Status Progress" in df.columns else 0
+    not_started = len(df[df["Status Progress"].str.lower().str.contains("not started", na=False)]) if "Status Progress" in df.columns else 0
+
+    charts["metrics"] = {
+        "total": total, "completed": completed,
+        "in_progress": in_progress, "not_started": not_started,
+    }
+
+    if "Client" in df.columns:
+        valid_clients = df.dropna(subset=["Client"])
+        if valid_clients.empty:
+            return charts
+        cc = valid_clients["Client"].value_counts().reset_index()
+        cc.columns = ["Client", "Bilangan"]
+        fig = px.bar(cc, x="Client", y="Bilangan", title="Projek mengikut Client",
+                      color="Client", text="Bilangan")
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
+        charts["client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+
+    if "Status Progress" in df.columns:
+        valid_status = df.dropna(subset=["Status Progress"])
+        if valid_status.empty:
+            return charts
+        sc = valid_status["Status Progress"].value_counts().reset_index()
+        sc.columns = ["Status", "Bilangan"]
+        fig = px.pie(sc, names="Status", values="Bilangan", title="Status Progress Projek",
+                      hole=0.3)
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
+        charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+
+    if "Title" in df.columns and "Percentage" in df.columns:
+        valid = df.dropna(subset=["Percentage"]).copy()
+        if not valid.empty:
+            valid = valid.sort_values("Percentage", ascending=True)
+            valid["Label"] = valid["Title"] + " - " + valid["Client"].astype(str)
+            fig = px.bar(valid, x="Percentage", y="Label", orientation="h",
+                          title="Peratusan Penyelesaian mengikut Tugasan",
+                          color="Percentage", color_continuous_scale=["#e74c3c", "#f39c12", "#2ecc71"],
+                          text="Percentage")
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), yaxis=dict(autorange="reversed"), height=max(400, 30*len(valid)))
+            charts["progress_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+
+    display_cols_p = ["Client", "Title", "Category", "Progress", "Priority", "Start date", "Due date", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
+    avail_p = [c for c in display_cols_p if c in df.columns]
+    detail = df[avail_p].copy()
+    for c in ["Start date", "Due date", "Target Date"]:
+        if c in detail.columns:
+            detail[c] = detail[c].dt.strftime("%d/%m/%Y") if not detail[c].isna().all() else detail[c]
+    charts["detail_table"] = detail.to_html(index=False)
+
+    return charts
+
+
 def apply_filters(df, args):
     if "Source File" in df.columns:
         sources = sorted(df["Source File"].unique())
@@ -724,6 +860,9 @@ def index():
         "source_files": list(df["Source File"].unique()) if not df.empty and "Source File" in df.columns else [],
     }
 
+    project_df = load_project_data()
+    has_project = not project_df.empty
+
     if has_data:
         overview_charts = build_charts(df_filtered)
         status_charts = build_status_charts(df_filtered)
@@ -732,9 +871,12 @@ def index():
         comparison_charts = build_client_comparison_charts(df_filtered)
         timeline_charts = build_timeline_charts(df_filtered)
         sla_charts = build_sla_charts(df_filtered)
+        warranty_charts = build_warranty_charts(df_filtered)
+        project_charts = build_project_charts(project_df)
     else:
         overview_charts = status_charts = priority_charts = ageing_charts = {}
         comparison_charts = timeline_charts = sla_charts = {}
+        warranty_charts = project_charts = {}
 
     display_cols = [
         "Client", "Ticket No", "Task Type", "Project", "Company",
@@ -779,6 +921,7 @@ def index():
     return render_template(
         "dashboard.html",
         has_data=has_data,
+        has_project=has_project,
         data_info=data_info,
         filter_options=filter_options,
         overview_charts=overview_charts,
@@ -788,6 +931,9 @@ def index():
         comparison_charts=comparison_charts,
         timeline_charts=timeline_charts,
         sla_charts=sla_charts,
+        warranty_charts=warranty_charts,
+        project_charts=project_charts,
+        project_data=project_df.to_dict("records") if has_project else [],
         detail_table=detail_df.to_html(index=False, classes="table table-striped") if has_data and not detail_df.empty else "",
         ageing_list_data=ageing_list_data,
         now=datetime.now().strftime("%d-%m-%Y %H:%M"),

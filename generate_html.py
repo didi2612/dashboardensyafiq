@@ -771,7 +771,7 @@ tabDefs.push({
     html += '<div class="chart-row"><div class="chart-box"><h3>Projek mengikut Client</h3><div id="chartProjClient"></div></div>';
     html += '<div class="chart-box"><h3>Status Progress</h3><div id="chartProjStatus"></div></div></div>';
     if (DATA.project_timeline && DATA.project_timeline.length) {
-      html += '<div class="chart-full"><h3>Timeline Projek</h3><div id="chartProjTimeline"></div></div>';
+      html += '<div class="chart-full"><h3>PROJECT DEVELOPMENT TIMELINE</h3><div id="chartProjTimeline"></div></div>';
     }
     html += '<div class="chart-full"><h3>Butiran Projek</h3><div class="data-table-wrap"><table id="projectTable"><tr><th>Client</th><th>Title</th><th>Category</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Percentage</th></tr></table></div></div>';
     return html;

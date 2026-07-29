@@ -379,7 +379,7 @@ def build_project_charts(df):
             fig = px.timeline(
                 valid, x_start="Start date", x_end="Due date",
                 y="Title", color="Client",
-                title="Timeline Projek mengikut Client",
+                title="PROJECT DEVELOPMENT TIMELINE",
                 color_discrete_sequence=px.colors.qualitative.Plotly,
             )
             fig.update_yaxes(autorange="reversed")

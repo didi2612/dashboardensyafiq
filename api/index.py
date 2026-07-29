@@ -7,7 +7,10 @@ import os, sys, glob, json
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates"),
+)
 
 def log(msg, level="INFO"):
     print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {level} {msg}", flush=True)

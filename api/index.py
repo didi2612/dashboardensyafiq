@@ -310,23 +310,23 @@ def build_warranty_charts(df):
         fig = px.pie(sc, names="Status", values="Count", title="Warranty Ticket Status",
                       color="Status", color_discrete_map=COLORS, hole=0.3)
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
-        charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Task Type" in warranty_df.columns:
         tc = warranty_df["Task Type"].value_counts().reset_index()
         tc.columns = ["Task Type", "Count"]
         fig = px.bar(tc, x="Task Type", y="Count", title="Warranty Tickets by Task Type",
-                      color="Task Type", text="Bilangan")
+                      color="Task Type", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-        charts["task_type_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["task_type_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Project" in warranty_df.columns:
         pc = warranty_df["Project"].value_counts().reset_index()
         pc.columns = ["Project", "Count"]
         fig = px.bar(pc, x="Project", y="Count", title="Warranty Tickets by Project",
-                      color="Project", text="Bilangan")
+                      color="Project", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-        charts["project_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["project_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     display_cols = ["Ticket No", "Task Type", "Project", "Company", "Ticket Title", "Priority", "Ticket Status", "Ticket Created Date", "Days"]
     avail = [c for c in display_cols if c in warranty_df.columns]
@@ -360,9 +360,9 @@ def build_project_charts(df):
         cc = valid_clients["Client"].value_counts().reset_index()
         cc.columns = ["Client", "Count"]
         fig = px.bar(cc, x="Client", y="Count", title="Projects by Client",
-                      color="Client", text="Bilangan")
+                      color="Client", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
-        charts["client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Status Progress" in df.columns:
         valid_status = df.dropna(subset=["Status Progress"])
@@ -373,7 +373,7 @@ def build_project_charts(df):
         fig = px.pie(sc, names="Status", values="Count", title="Project Status Progress",
                       hole=0.3)
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-        charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Start date" in df.columns and "Due date" in df.columns and "Title" in df.columns:
         valid = df.dropna(subset=["Start date", "Due date", "Title"]).copy()
@@ -404,7 +404,7 @@ def build_project_charts(df):
                         font=dict(color="#374151"), showlegend=False,
                         height=max(200, 30*len(cdf)),
                     )
-                    timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, config={"displayModeBar": False})}</div>'
+                    timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'
             charts["timeline_chart"] = timeline_charts_html
 
     display_cols_p = ["Client", "Title", "Category", "Progress", "Priority", "Start date", "Due date", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
@@ -470,7 +470,7 @@ def apply_filters(df, args):
 
     search_term = args.get("search", "")
     if search_term:
-        mask = pd.Series([False] * len(df))
+        mask = pd.Series(False, index=df.index)
         for col in ["Ticket Detail", "Ticket Title", "Ticket No", "Ticket Category", "Company", "Project"]:
             if col in df.columns:
                 mask = mask | df[col].astype(str).str.contains(search_term, case=False, na=False)
@@ -516,18 +516,18 @@ def build_charts(df):
             color_discrete_map=COLORS, hole=0.3,
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
-        charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Priority" in df.columns:
         priority_counts = df["Priority"].value_counts().reset_index()
         priority_counts.columns = ["Keutamaan", "Bilangan"]
         fig = px.pie(
             priority_counts, names="Keutamaan", values="Bilangan",
-            title="Priority Distribution", color="Priority",
+            title="Priority Distribution", color="Keutamaan",
             color_discrete_map=PRIORITY_COLORS, hole=0.3,
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
-        charts["priority_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["priority_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
         client_dist = df["Client"].value_counts().reset_index()
@@ -539,7 +539,7 @@ def build_charts(df):
             color_discrete_sequence=client_colors, text="Bilangan",
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-        charts["client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
 
@@ -559,7 +559,7 @@ def build_status_charts(df):
         color_discrete_sequence=status_colors_seq, barmode="stack",
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
-    charts["status_client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+    charts["status_client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     status_counts = df["Ticket Status"].value_counts().reset_index()
     status_counts.columns = ["Status", "Bilangan"]
@@ -571,7 +571,7 @@ def build_status_charts(df):
         color="Status", color_discrete_sequence=colors2, text="Bilangan",
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-    charts["status_hbar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+    charts["status_hbar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     pivot = df.groupby(["Client", "Ticket Status"]).size().unstack(fill_value=0)
     charts["status_pivot"] = pivot.to_html()
@@ -589,11 +589,11 @@ def build_priority_charts(df):
     priority_counts.columns = ["Keutamaan", "Bilangan"]
     fig = px.pie(
         priority_counts, names="Keutamaan", values="Bilangan",
-        title="Priority Distribution", color="Priority",
+        title="Priority Distribution", color="Keutamaan",
         color_discrete_map=PRIORITY_COLORS, hole=0.4,
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-    charts["priority_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+    charts["priority_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Status" in df.columns:
         cross = df.groupby(["Priority", "Ticket Status"]).size().reset_index(name="Bilangan")
@@ -603,7 +603,7 @@ def build_priority_charts(df):
             color_discrete_map=COLORS, barmode="group",
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-        charts["priority_status_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["priority_status_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
         pivot = df.groupby(["Client", "Priority"]).size().unstack(fill_value=0)
@@ -614,16 +614,15 @@ def build_priority_charts(df):
 
 def build_ageing_charts(df):
     charts = {}
+    age_order = ["1-30 Days", "31-60 Days", "> 60 Days"]
+    charts["age_order"] = age_order
+    charts["ageing_clients"] = {}
 
     has_ageing = "Ageing" in df.columns and df["Ageing"].notna().any()
     has_days = "Days" in df.columns and df["Days"].notna().any()
 
     if not has_ageing and not has_days:
         return charts
-
-    age_order = ["1-30 Days", "31-60 Days", "> 60 Days"]
-    charts["age_order"] = age_order
-    charts["ageing_clients"] = {}
 
     if has_ageing and "Client" in df.columns:
         total_all = df["Ageing"].notna().sum()
@@ -640,12 +639,12 @@ def build_ageing_charts(df):
             fig = px.bar(
                 counts, x="Kumpulan Umur", y="Bilangan",
                 color="Kumpulan Umur", color_discrete_map=AGEING_COLORS,
-                text="Count", title=client,
+                text="Bilangan", title=client,
             )
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
             charts["ageing_clients"][client] = {
                 "count": int(len(dc)),
-                "chart": fig.to_html(full_html=False, config={"displayModeBar": False}),
+                "chart": fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False}),
                 "table": {k: int(counts.set_index("Kumpulan Umur").loc[k, "Bilangan"]) for k in age_order},
             }
 
@@ -658,7 +657,7 @@ def build_ageing_charts(df):
                 marginal="box",
             )
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-            charts["days_hist"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+            charts["days_hist"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "SLA Breach" in df.columns and "Client" in df.columns:
         sla_by_client = df.groupby("Client")["SLA Breach"].sum().reset_index()
@@ -669,7 +668,7 @@ def build_ageing_charts(df):
             text="Pelanggaran SLA",
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
-        charts["sla_breach_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["sla_breach_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
 
@@ -702,10 +701,10 @@ def build_client_comparison_charts(df):
 
     fig = px.bar(
         client_stats, x="Client", y="Jumlah",
-        title="Total Tickets by Client", color="Client", text="Total",
+        title="Total Tickets by Client", color="Client", text="Jumlah",
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-    charts["client_total_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+    charts["client_total_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     status_cols = [c for c in ["Completed", "Pending", "In Progress", "Closed"] if c in client_stats.columns]
     if status_cols:
@@ -714,7 +713,7 @@ def build_client_comparison_charts(df):
         for i, col in enumerate(status_cols):
             fig.add_trace(go.Bar(name=col, x=client_stats["Client"], y=client_stats[col], marker_color=palette[i % len(palette)]))
         fig.update_layout(barmode="stack", title="Status by Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
-        charts["client_status_stacked"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["client_status_stacked"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Priority" in df.columns:
         priority_dummies = pd.get_dummies(df[["Client", "Priority"]], columns=["Priority"])
@@ -729,7 +728,7 @@ def build_client_comparison_charts(df):
                 cats.append(cats[0])
                 fig.add_trace(go.Scatterpolar(r=values, theta=cats, fill="toself", name=row["Client"]))
             fig.update_layout(polar=dict(radialaxis=dict(visible=True)), title="Priority Profile by Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-            charts["client_radar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+            charts["client_radar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
 
@@ -753,7 +752,7 @@ def build_timeline_charts(df):
         color_discrete_sequence=["#3498db"],
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-    charts["timeline_created"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+    charts["timeline_created"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Completed Date" in df.columns:
         df_completed = df[df["Ticket Completed Date"].notna()].copy()
@@ -766,13 +765,13 @@ def build_timeline_charts(df):
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Dicipta"], mode="lines+markers", name="Dicipta", line=dict(color="#3498db", width=2)))
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Selesai"], mode="lines+markers", name="Selesai", line=dict(color="#2ecc71", width=2)))
             fig.update_layout(title="Created vs Completed", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
-            charts["timeline_created_vs_completed"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+            charts["timeline_created_vs_completed"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
         client_monthly = df_dated.groupby(["Bulan", "Client"]).size().reset_index(name="Bilangan")
         fig = px.area(client_monthly, x="Bulan", y="Bilangan", color="Client", title="Tickets by Client and Month")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-        charts["timeline_client_area"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["timeline_client_area"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Category" in df.columns:
         cat_monthly = df_dated.groupby(["Bulan", "Ticket Category"]).size().reset_index(name="Bilangan")
@@ -781,7 +780,7 @@ def build_timeline_charts(df):
             cat_monthly = cat_monthly[cat_monthly["Ticket Category"].isin(top_cats)]
             fig = px.line(cat_monthly, x="Bulan", y="Bilangan", color="Ticket Category", title="Tickets by Category (Top 8)", markers=True)
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-            charts["timeline_category"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+            charts["timeline_category"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
 
@@ -813,7 +812,7 @@ def build_sla_charts(df):
         ),
     ))
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), height=350)
-    charts["sla_gauge"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+    charts["sla_gauge"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
         client_sla = df.groupby("Client").agg(Total=("SLA Breach", "count"), Breaches=("SLA Breach", "sum")).reset_index()
@@ -827,7 +826,7 @@ def build_sla_charts(df):
             text="Kadar Pematuhan (%)",
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
-        charts["sla_client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["sla_client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
         if "Ticket Status" in df.columns:
             sla_pivot = df.groupby(["Client", "Ticket Status"])["SLA Breach"].agg(["sum", "count", "mean"]).reset_index()

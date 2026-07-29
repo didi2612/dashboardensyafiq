@@ -306,24 +306,24 @@ def build_warranty_charts(df):
 
     if "Ticket Status" in warranty_df.columns:
         sc = warranty_df["Ticket Status"].value_counts().reset_index()
-        sc.columns = ["Status", "Bilangan"]
-        fig = px.pie(sc, names="Status", values="Bilangan", title="Status Tiket Warranty",
+        sc.columns = ["Status", "Count"]
+        fig = px.pie(sc, names="Status", values="Count", title="Warranty Ticket Status",
                       color="Status", color_discrete_map=COLORS, hole=0.3)
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
         charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     if "Task Type" in warranty_df.columns:
         tc = warranty_df["Task Type"].value_counts().reset_index()
-        tc.columns = ["Task Type", "Bilangan"]
-        fig = px.bar(tc, x="Task Type", y="Bilangan", title="Tiket Warranty mengikut Task Type",
+        tc.columns = ["Task Type", "Count"]
+        fig = px.bar(tc, x="Task Type", y="Count", title="Warranty Tickets by Task Type",
                       color="Task Type", text="Bilangan")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
         charts["task_type_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     if "Project" in warranty_df.columns:
         pc = warranty_df["Project"].value_counts().reset_index()
-        pc.columns = ["Project", "Bilangan"]
-        fig = px.bar(pc, x="Project", y="Bilangan", title="Tiket Warranty mengikut Projek",
+        pc.columns = ["Project", "Count"]
+        fig = px.bar(pc, x="Project", y="Count", title="Warranty Tickets by Project",
                       color="Project", text="Bilangan")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
         charts["project_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
@@ -358,8 +358,8 @@ def build_project_charts(df):
         if valid_clients.empty:
             return charts
         cc = valid_clients["Client"].value_counts().reset_index()
-        cc.columns = ["Client", "Bilangan"]
-        fig = px.bar(cc, x="Client", y="Bilangan", title="Projek mengikut Client",
+        cc.columns = ["Client", "Count"]
+        fig = px.bar(cc, x="Client", y="Count", title="Projects by Client",
                       color="Client", text="Bilangan")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
         charts["client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
@@ -369,8 +369,8 @@ def build_project_charts(df):
         if valid_status.empty:
             return charts
         sc = valid_status["Status Progress"].value_counts().reset_index()
-        sc.columns = ["Status", "Bilangan"]
-        fig = px.pie(sc, names="Status", values="Bilangan", title="Status Progress Projek",
+        sc.columns = ["Status", "Count"]
+        fig = px.pie(sc, names="Status", values="Count", title="Project Status Progress",
                       hole=0.3)
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
@@ -512,7 +512,7 @@ def build_charts(df):
         status_counts.columns = ["Status", "Bilangan"]
         fig = px.pie(
             status_counts, names="Status", values="Bilangan",
-            title="Taburan Status Tiket", color="Status",
+            title="Ticket Status Distribution", color="Status",
             color_discrete_map=COLORS, hole=0.3,
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
@@ -523,7 +523,7 @@ def build_charts(df):
         priority_counts.columns = ["Keutamaan", "Bilangan"]
         fig = px.pie(
             priority_counts, names="Keutamaan", values="Bilangan",
-            title="Taburan Keutamaan", color="Keutamaan",
+            title="Priority Distribution", color="Priority",
             color_discrete_map=PRIORITY_COLORS, hole=0.3,
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
@@ -535,7 +535,7 @@ def build_charts(df):
         client_colors = px.colors.qualitative.Plotly[:len(client_dist)]
         fig = px.bar(
             client_dist, x="Client", y="Bilangan",
-            title="Tiket mengikut Client", color="Client",
+            title="Tickets by Client", color="Client",
             color_discrete_sequence=client_colors, text="Bilangan",
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
@@ -555,7 +555,7 @@ def build_status_charts(df):
     status_colors_seq = px.colors.qualitative.Plotly[:len(unique_statuses)]
     fig = px.bar(
         status_by_client, x="Client", y="Bilangan",
-        color="Ticket Status", title="Status mengikut Client",
+        color="Ticket Status", title="Status by Client",
         color_discrete_sequence=status_colors_seq, barmode="stack",
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
@@ -567,7 +567,7 @@ def build_status_charts(df):
     colors2 = px.colors.qualitative.Plotly[:len(statuses2)]
     fig = px.bar(
         status_counts, x="Bilangan", y="Status",
-        orientation="h", title="Jumlah mengikut Status",
+        orientation="h", title="Count by Status",
         color="Status", color_discrete_sequence=colors2, text="Bilangan",
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
@@ -589,7 +589,7 @@ def build_priority_charts(df):
     priority_counts.columns = ["Keutamaan", "Bilangan"]
     fig = px.pie(
         priority_counts, names="Keutamaan", values="Bilangan",
-        title="Taburan Keutamaan", color="Keutamaan",
+        title="Priority Distribution", color="Priority",
         color_discrete_map=PRIORITY_COLORS, hole=0.4,
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
@@ -599,7 +599,7 @@ def build_priority_charts(df):
         cross = df.groupby(["Priority", "Ticket Status"]).size().reset_index(name="Bilangan")
         fig = px.bar(
             cross, x="Priority", y="Bilangan",
-            color="Ticket Status", title="Keutamaan mengikut Status",
+            color="Ticket Status", title="Priority by Status",
             color_discrete_map=COLORS, barmode="group",
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
@@ -640,7 +640,7 @@ def build_ageing_charts(df):
             fig = px.bar(
                 counts, x="Kumpulan Umur", y="Bilangan",
                 color="Kumpulan Umur", color_discrete_map=AGEING_COLORS,
-                text="Bilangan", title=client,
+                text="Count", title=client,
             )
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
             charts["ageing_clients"][client] = {
@@ -654,7 +654,7 @@ def build_ageing_charts(df):
         if len(valid_days) > 0:
             fig = px.histogram(
                 df.dropna(subset=["Days"]), x="Days", nbins=30,
-                title="Taburan Hari Terbuka", color_discrete_sequence=["#3498db"],
+                title="Days Open Distribution", color_discrete_sequence=["#3498db"],
                 marginal="box",
             )
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
@@ -665,7 +665,7 @@ def build_ageing_charts(df):
         sla_by_client.columns = ["Client", "Pelanggaran SLA"]
         fig = px.bar(
             sla_by_client, x="Client", y="Pelanggaran SLA",
-            title="Jumlah Pelanggaran SLA", color_discrete_sequence=["#e74c3c"],
+            title="Total SLA Breaches", color_discrete_sequence=["#e74c3c"],
             text="Pelanggaran SLA",
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
@@ -702,7 +702,7 @@ def build_client_comparison_charts(df):
 
     fig = px.bar(
         client_stats, x="Client", y="Jumlah",
-        title="Jumlah Tiket mengikut Client", color="Client", text="Jumlah",
+        title="Total Tickets by Client", color="Client", text="Total",
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
     charts["client_total_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
@@ -713,7 +713,7 @@ def build_client_comparison_charts(df):
         palette = px.colors.qualitative.Plotly
         for i, col in enumerate(status_cols):
             fig.add_trace(go.Bar(name=col, x=client_stats["Client"], y=client_stats[col], marker_color=palette[i % len(palette)]))
-        fig.update_layout(barmode="stack", title="Status mengikut Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
+        fig.update_layout(barmode="stack", title="Status by Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
         charts["client_status_stacked"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     if "Priority" in df.columns:
@@ -728,7 +728,7 @@ def build_client_comparison_charts(df):
                 cats = [c.replace("Priority_", "") for c in categories]
                 cats.append(cats[0])
                 fig.add_trace(go.Scatterpolar(r=values, theta=cats, fill="toself", name=row["Client"]))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True)), title="Profil Keutamaan mengikut Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True)), title="Priority Profile by Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["client_radar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     return charts
@@ -749,7 +749,7 @@ def build_timeline_charts(df):
 
     fig = px.line(
         monthly_created, x="Bulan", y="Dicipta",
-        title="Tiket Dicipta mengikut Bulan", markers=True,
+        title="Tickets Created by Month", markers=True,
         color_discrete_sequence=["#3498db"],
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
@@ -765,12 +765,12 @@ def build_timeline_charts(df):
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Dicipta"], mode="lines+markers", name="Dicipta", line=dict(color="#3498db", width=2)))
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Selesai"], mode="lines+markers", name="Selesai", line=dict(color="#2ecc71", width=2)))
-            fig.update_layout(title="Dicipta vs Selesai", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
+            fig.update_layout(title="Created vs Completed", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
             charts["timeline_created_vs_completed"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
         client_monthly = df_dated.groupby(["Bulan", "Client"]).size().reset_index(name="Bilangan")
-        fig = px.area(client_monthly, x="Bulan", y="Bilangan", color="Client", title="Tiket mengikut Client dan Bulan")
+        fig = px.area(client_monthly, x="Bulan", y="Bilangan", color="Client", title="Tickets by Client and Month")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["timeline_client_area"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
@@ -779,7 +779,7 @@ def build_timeline_charts(df):
         if len(cat_monthly) > 0:
             top_cats = df_dated["Ticket Category"].value_counts().head(8).index.tolist()
             cat_monthly = cat_monthly[cat_monthly["Ticket Category"].isin(top_cats)]
-            fig = px.line(cat_monthly, x="Bulan", y="Bilangan", color="Ticket Category", title="Tiket mengikut Kategori (Top 8)", markers=True)
+            fig = px.line(cat_monthly, x="Bulan", y="Bilangan", color="Ticket Category", title="Tickets by Category (Top 8)", markers=True)
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["timeline_category"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
@@ -801,7 +801,7 @@ def build_sla_charts(df):
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number", value=compliance_rate,
-        title={"text": "Kadar Pematuhan SLA (%)"},
+        title={"text": "SLA Compliance Rate (%)"},
         gauge=dict(
             axis=dict(range=[0, 100]), bar=dict(color="#2ecc71"),
             steps=[
@@ -822,7 +822,7 @@ def build_sla_charts(df):
 
         fig = px.bar(
             client_sla, x="Kadar Pematuhan (%)", y="Client",
-            orientation="h", title="Kadar Pematuhan SLA mengikut Client",
+            orientation="h", title="SLA Compliance Rate by Client",
             color="Kadar Pematuhan (%)", color_continuous_scale=["#e74c3c", "#f39c12", "#2ecc71"],
             text="Kadar Pematuhan (%)",
         )

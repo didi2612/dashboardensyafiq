@@ -177,7 +177,7 @@ for c in clients_list:
     if not dc.empty:
         counts = dc['Ageing'].value_counts()
         ageing_data[c] = {k: int(counts.get(k, 0)) for k in AGE_ORDER}
-        ageing_data[c]['Jumlah'] = sum(ageing_data[c].values())
+        ageing_data[c]['Total'] = sum(ageing_data[c].values())
 
 # Priority per client
 priority_data = {}
@@ -259,7 +259,7 @@ def classify_age(d):
     except: return d
 
 html = r'''<!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -302,15 +302,15 @@ td{color:#e0e0e0}
 <body>
 
 <h1>Client Issues Dashboard</h1>
-<div class="caption">Static Dashboard &mdash; Data dikemas kini: ''' + pd.Timestamp.now().strftime('%d-%m-%Y %H:%M') + r'''</div>
+<div class="caption">Static Dashboard &mdash; Data updated: ''' + pd.Timestamp.now().strftime('%d-%m-%Y %H:%M') + r'''</div>
 
 <div class="controls" id="filters">
   <div class="control-group">
-    <label>Tarikh Mula</label>
+    <label>Start Date</label>
     <input type="date" id="dateStart">
   </div>
   <div class="control-group">
-    <label>Tarikh Akhir</label>
+    <label>End Date</label>
     <input type="date" id="dateEnd">
   </div>
   <div class="control-group">
@@ -326,8 +326,8 @@ td{color:#e0e0e0}
     <select id="filterStatus" multiple size="4"></select>
   </div>
   <div class="control-group">
-    <label>Carian</label>
-    <input type="text" id="searchText" placeholder="Cari tiket...">
+    <label>Search</label>
+    <input type="text" id="searchText" placeholder="Search tickets...">
   </div>
 </div>
 
@@ -388,18 +388,18 @@ tabDefs.push({
   label: 'Overview',
   render: function(tickets) {
     var html = '<div class="metrics">';
-    html += '<div class="metric-card"><div class="val">'+DATA.total_records+'</div><div class="lbl">Jumlah Tiket</div></div>';
+    html += '<div class="metric-card"><div class="val">'+DATA.total_records+'</div><div class="lbl">Total Tickets</div></div>';
     html += '<div class="metric-card"><div class="val">'+DATA.total_clients+'</div><div class="lbl">Client</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#f39c12">'+DATA.pending+'</div><div class="lbl">Menunggu</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#3498db">'+DATA.in_progress+'</div><div class="lbl">Dalam Proses</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+DATA.completed+'</div><div class="lbl">Selesai</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+DATA.sla_breach+'</div><div class="lbl">Pelanggaran SLA</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#f39c12">'+DATA.pending+'</div><div class="lbl">Pending</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#3498db">'+DATA.in_progress+'</div><div class="lbl">In Progress</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+DATA.completed+'</div><div class="lbl">Completed</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+DATA.sla_breach+'</div><div class="lbl">SLA Breaches</div></div>';
     html += '</div>';
 
-    html += '<div class="chart-row"><div class="chart-box"><h3>Taburan Status</h3><div id="chartStatus"></div></div>';
-    html += '<div class="chart-box"><h3>Taburan Keutamaan</h3><div id="chartPriority"></div></div></div>';
+    html += '<div class="chart-row"><div class="chart-box"><h3>Status Distribution</h3><div id="chartStatus"></div></div>';
+    html += '<div class="chart-box"><h3>Priority Distribution</h3><div id="chartPriority"></div></div></div>';
 
-    html += '<div class="chart-box"><h3>Tiket mengikut Client</h3><div id="chartClientDist"></div></div>';
+    html += '<div class="chart-box"><h3>Tickets by Client</h3><div id="chartClientDist"></div></div>';
     return html;
   },
   afterRender: function() {
@@ -438,14 +438,14 @@ tabDefs.push({
   }
 });
 
-// Tab 1: Pecahan Status
+// Tab 1: Status Breakdown
 tabDefs.push({
-  label: 'Pecahan Status',
+  label: 'Status Breakdown',
   render: function() {
     var html = '<div class="chart-row">';
-    html += '<div class="chart-box"><h3>Status Pai</h3><div id="chartStatusPie"></div></div>';
+    html += '<div class="chart-box"><h3>Status Pie</h3><div id="chartStatusPie"></div></div>';
     html += '<div class="chart-box"><h3>Status Bar</h3><div id="chartStatusBar"></div></div></div>';
-    html += '<div class="chart-full"><h3>Status mengikut Client</h3><div id="chartStatusClient"></div></div>';
+    html += '<div class="chart-full"><h3>Status by Client</h3><div id="chartStatusClient"></div></div>';
     return html;
   },
   afterRender: function() {
@@ -479,14 +479,14 @@ tabDefs.push({
   }
 });
 
-// Tab 2: Analisis Keutamaan
+// Tab 2: Priority Analysis
 tabDefs.push({
-  label: 'Analisis Keutamaan',
+  label: 'Priority Analysis',
   render: function() {
     var html = '<div class="chart-row">';
-    html += '<div class="chart-box"><h3>Keutamaan Pai</h3><div id="chartPriPie"></div></div>';
-    html += '<div class="chart-box"><h3>Keutamaan Bar</h3><div id="chartPriBar"></div></div></div>';
-    html += '<div class="chart-full"><h3>Keutamaan mengikut Client</h3><div id="chartPriClient"></div></div>';
+    html += '<div class="chart-box"><h3>Priority Pie</h3><div id="chartPriPie"></div></div>';
+    html += '<div class="chart-box"><h3>Priority Bar</h3><div id="chartPriBar"></div></div></div>';
+    html += '<div class="chart-full"><h3>Priority by Client</h3><div id="chartPriClient"></div></div>';
     return html;
   },
   afterRender: function() {
@@ -517,11 +517,11 @@ tabDefs.push({
   }
 });
 
-// Tab 3: Analisis Penuaan
+// Tab 3: Ageing Analysis
 tabDefs.push({
-  label: 'Analisis Penuaan',
+  label: 'Ageing Analysis',
   render: function() {
-    var html = '<div class="metrics"><div class="metric-card"><div class="val">'+DATA.total_records+'</div><div class="lbl">Jumlah Rekod</div></div></div>';
+    var html = '<div class="metrics"><div class="metric-card"><div class="val">'+DATA.total_records+'</div><div class="lbl">Total Records</div></div></div>';
     html += '<div id="ageingClients"></div>';
     return html;
   },
@@ -531,14 +531,14 @@ tabDefs.push({
     for (var ci=0; ci<DATA.clients.length; ci++) {
       var c = DATA.clients[ci];
       var cd = DATA.ageing_data[c];
-      if (!cd || !cd.Jumlah) continue;
-      html += '<div class="client-section"><h4>'+c+' \u2014 '+cd.Jumlah+' rekod</h4>';
+      if (!cd || !cd.Total) continue;
+      html += '<div class="client-section"><h4>'+c+' \u2014 '+cd.Total+' records</h4>';
       html += '<div class="chart-row"><div class="chart-box" style="min-width:200px;flex:0.4">';
-      html += '<table><tr><th>Kumpulan Umur</th><th>Bilangan</th></tr>';
+      html += '<table><tr><th>Age Group</th><th>Count</th></tr>';
       ageOrder.forEach(function(a) {
         html += '<tr><td>'+a+'</td><td>'+(cd[a]||0)+'</td></tr>';
       });
-      html += '<tr style="font-weight:700;border-top:2px solid #444"><td>Jumlah</td><td>'+cd.Jumlah+'</td></tr>';
+      html += '<tr style="font-weight:700;border-top:2px solid #444"><td>Total</td><td>'+cd.Total+'</td></tr>';
       html += '</table></div>';
       html += '<div class="chart-box" style="flex:1"><div id="ageChart'+ci+'"></div></div></div></div>';
     }
@@ -546,7 +546,7 @@ tabDefs.push({
     for (var ci=0; ci<DATA.clients.length; ci++) {
       var c = DATA.clients[ci];
       var cd = DATA.ageing_data[c];
-      if (!cd || !cd.Jumlah) continue;
+      if (!cd || !cd.Total) continue;
       var aLabels = [], aValues = [], aColors = [];
       ageOrder.forEach(function(a) {
         if (cd[a]) { aLabels.push(a); aValues.push(cd[a]); aColors.push(ageColors[a]); }
@@ -560,15 +560,15 @@ tabDefs.push({
   }
 });
 
-// Tab 4: Perbandingan Client
+// Tab 4: Client Comparison
 tabDefs.push({
-  label: 'Perbandingan Client',
+  label: 'Client Comparison',
   render: function() {
     var html = '<div class="chart-row">';
-    html += '<div class="chart-box"><h3>Tiket mengikut Client</h3><div id="compClientPie"></div></div>';
-    html += '<div class="chart-box"><h3>Taburan Tiket</h3><div id="compClientBar"></div></div></div>';
-    html += '<div class="chart-full"><h3>Ringkasan Client</h3><div class="data-table-wrap"><table id="compClientTable"><tr><th>Client</th><th>Jumlah Tiket</th>';
-    html += '<th>Menunggu</th><th>Dalam Proses</th><th>Selesai</th><th>Pelanggaran SLA</th></tr></table></div></div>';
+    html += '<div class="chart-box"><h3>Tickets by Client</h3><div id="compClientPie"></div></div>';
+    html += '<div class="chart-box"><h3>Ticket Distribution</h3><div id="compClientBar"></div></div></div>';
+    html += '<div class="chart-full"><h3>Client Summary</h3><div class="data-table-wrap"><table id="compClientTable"><tr><th>Client</th><th>Total Tickets</th>';
+    html += '<th>Pending</th><th>In Progress</th><th>Completed</th><th>SLA Breaches</th></tr></table></div></div>';
     return html;
   },
   afterRender: function() {
@@ -597,11 +597,11 @@ tabDefs.push({
   }
 });
 
-// Tab 5: Aliran Masa
+// Tab 5: Timeline
 tabDefs.push({
-  label: 'Aliran Masa',
+  label: 'Timeline',
   render: function() {
-    return '<div class="chart-full"><h3>Aliran Tiket mengikut Masa</h3><div id="chartTimeline"></div></div>';
+    return '<div class="chart-full"><h3>Ticket Flow Over Time</h3><div id="chartTimeline"></div></div>';
   },
   afterRender: function() {
     var dates = Object.keys(DATA.timeline_data).sort();
@@ -615,20 +615,20 @@ tabDefs.push({
   }
 });
 
-// Tab 6: Pematuhan SLA
+// Tab 6: SLA Compliance
 tabDefs.push({
-  label: 'Pematuhan SLA',
+  label: 'SLA Compliance',
   render: function() {
     var html = '<div class="metrics">';
     var totalCompliant = 0, totalBreach = 0;
     for (var c in DATA.sla_data) { totalCompliant += DATA.sla_data[c].Compliant; totalBreach += DATA.sla_data[c].Breach; }
     var overallRate = DATA.total_records > 0 ? Math.round((totalCompliant/DATA.total_records)*100) : 0;
-    html += '<div class="metric-card"><div class="val" style="color:'+(overallRate>=80?'#2ecc71':'#e74c3c')+'">'+overallRate+'%</div><div class="lbl">Kadar Pematuhan</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+totalCompliant+'</div><div class="lbl">Patuh SLA</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+totalBreach+'</div><div class="lbl">Pelanggaran SLA</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:'+(overallRate>=80?'#2ecc71':'#e74c3c')+'">'+overallRate+'%</div><div class="lbl">Compliance Rate</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+totalCompliant+'</div><div class="lbl">SLA Compliant</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+totalBreach+'</div><div class="lbl">SLA Breaches</div></div>';
     html += '</div>';
-    html += '<div class="chart-row"><div class="chart-box"><h3>SLA oleh Client</h3><div id="chartSLA"></div></div>';
-    html += '<div class="chart-box"><h3>Kadar Pematuhan SLA</h3><div id="chartSLARate"></div></div></div>';
+    html += '<div class="chart-row"><div class="chart-box"><h3>SLA by Client</h3><div id="chartSLA"></div></div>';
+    html += '<div class="chart-box"><h3>SLA Compliance Rate</h3><div id="chartSLARate"></div></div></div>';
     return html;
   },
   afterRender: function() {
@@ -636,8 +636,8 @@ tabDefs.push({
     var breachVals = cl.map(function(c){return DATA.sla_data[c].Breach;});
     var complVals = cl.map(function(c){return DATA.sla_data[c].Compliant;});
     Plotly.newPlot('chartSLA', [
-      {x:cl, y:complVals, name:'Patuh', type:'bar', marker:{color:'#2ecc71'}},
-      {x:cl, y:breachVals, name:'Langgar', type:'bar', marker:{color:'#e74c3c'}}
+      {x:cl, y:complVals, name:'Compliant', type:'bar', marker:{color:'#2ecc71'}},
+      {x:cl, y:breachVals, name:'Breach', type:'bar', marker:{color:'#e74c3c'}}
     ], {barmode:'stack', template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
         font:{color:'#e0e0e0'}, xaxis:{tickangle:-45}, margin:{t:20,b:60,l:40,r:20}},
       {responsive:true, displayModeBar:false});
@@ -653,12 +653,12 @@ tabDefs.push({
   }
 });
 
-// Tab 7: Butiran Tiket
+// Tab 7: Ticket Details
 tabDefs.push({
-  label: 'Butiran Tiket',
+  label: 'Ticket Details',
   render: function() {
-    var html = '<div id="searchResult">'+DATA.total_records+' rekod</div>';
-    html += '<div class="data-table-wrap"><table id="ticketTable"><tr><th>Tiket</th><th>Client</th><th>Task Type</th><th>Priority</th><th>Status</th><th>Ageing</th><th>Title</th></tr></table></div>';
+    var html = '<div id="searchResult">'+DATA.total_records+' records</div>';
+    html += '<div class="data-table-wrap"><table id="ticketTable"><tr><th>Ticket</th><th>Client</th><th>Task Type</th><th>Priority</th><th>Status</th><th>Ageing</th><th>Title</th></tr></table></div>';
     return html;
   },
   afterRender: function() {
@@ -666,9 +666,9 @@ tabDefs.push({
   }
 });
 
-// Tab 8: Senarai Aging
+// Tab 8: Ageing List
 tabDefs.push({
-  label: 'Senarai Aging',
+  label: 'Ageing List',
   render: function() {
     var ageOrder = DATA.age_order;
     var html = '<div id="ageingList"></div>';
@@ -678,7 +678,7 @@ tabDefs.push({
     var container = document.getElementById('ageingList');
     var ageOrder = DATA.age_order;
     var tickets = DATA.tickets.filter(function(t){return t.Ageing && t.Ageing!=='nan' && t.Ageing!=='None' && t.Ageing!=='';});
-    container.innerHTML = '<div style="margin-bottom:12px;padding:8px 12px;background:#1a1d23;border-radius:4px;font-size:13px;color:#888">Jumlah tiket dengan aging: '+tickets.length+'</div>';
+    container.innerHTML = '<div style="margin-bottom:12px;padding:8px 12px;background:#1a1d23;border-radius:4px;font-size:13px;color:#888">Total tickets with ageing: '+tickets.length+'</div>';
     ageOrder.forEach(function(bucket) {
       var bt = tickets.filter(function(t){return t.Ageing===bucket;});
       if (!bt.length) return;
@@ -686,7 +686,7 @@ tabDefs.push({
       section.style.cssText = 'margin-bottom:16px;background:#1a1d23;border-radius:8px;padding:12px';
       var header = document.createElement('h3');
       header.style.cssText = 'font-size:15px;color:#e0e0e0;margin-bottom:10px';
-      header.textContent = bucket + ' \u2014 ' + bt.length + ' tiket';
+      header.textContent = bucket + ' \u2014 ' + bt.length + ' tickets';
       section.appendChild(header);
       var clients = {};
       bt.forEach(function(t){clients[t.Client]=(clients[t.Client]||0)+1;});
@@ -696,7 +696,7 @@ tabDefs.push({
         detail.style.cssText = 'margin-bottom:6px';
         var summary = document.createElement('summary');
         summary.style.cssText = 'cursor:pointer;padding:6px 10px;background:#262a30;border-radius:4px;font-size:13px;color:#2ecc71';
-        summary.textContent = bucket + ' / ' + c + ' (' + clients[c] + ' tiket)';
+        summary.textContent = bucket + ' / ' + c + ' (' + clients[c] + ' tickets)';
         detail.appendChild(summary);
         var table = document.createElement('table');
         table.style.cssText = 'width:100%;margin-top:6px;font-size:12px';
@@ -719,20 +719,20 @@ tabDefs.push({
   label: 'Client Warranty',
   render: function() {
     var wtickets = DATA.tickets.filter(function(t){return t.Client==='Client Warranty';});
-    if (!wtickets.length) return '<div style="padding:16px;color:#888">Tiada data Warranty ditemui</div>';
+    if (!wtickets.length) return '<div style="padding:16px;color:#888">No Warranty data found</div>';
     var wTotal = wtickets.length;
     var wCompleted = wtickets.filter(function(t){return ['Completed','Closed'].indexOf(t['Ticket Status'])>=0;}).length;
     var wPending = wtickets.filter(function(t){return t['Ticket Status']==='Pending';}).length;
     var wInProg = wtickets.filter(function(t){return t['Ticket Status']==='In Progress';}).length;
     var html = '<div class="metrics">';
-    html += '<div class="metric-card"><div class="val">'+wTotal+'</div><div class="lbl">Jumlah Tiket Warranty</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+wCompleted+'</div><div class="lbl">Selesai</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#f39c12">'+wPending+'</div><div class="lbl">Menunggu</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+wInProg+'</div><div class="lbl">Dalam Proses</div></div>';
+    html += '<div class="metric-card"><div class="val">'+wTotal+'</div><div class="lbl">Total Warranty Tickets</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+wCompleted+'</div><div class="lbl">Completed</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#f39c12">'+wPending+'</div><div class="lbl">Pending</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#e74c3c">'+wInProg+'</div><div class="lbl">In Progress</div></div>';
     html += '</div>';
     html += '<div class="chart-row"><div class="chart-box"><h3>Status Warranty</h3><div id="chartWStatus"></div></div>';
     html += '<div class="chart-box"><h3>Task Type</h3><div id="chartWTaskType"></div></div></div>';
-    html += '<div class="chart-full"><h3>Butiran Tiket Warranty</h3><div class="data-table-wrap"><table id="warrantyTable"><tr><th>Tiket</th><th>Task Type</th><th>Project</th><th>Priority</th><th>Status</th><th>Title</th></tr></table></div></div>';
+    html += '<div class="chart-full"><h3>Warranty Ticket Details</h3><div class="data-table-wrap"><table id="warrantyTable"><tr><th>Ticket</th><th>Task Type</th><th>Project</th><th>Priority</th><th>Status</th><th>Title</th></tr></table></div></div>';
     return html;
   },
   afterRender: function() {
@@ -768,19 +768,19 @@ tabDefs.push({
 tabDefs.push({
   label: 'Client Project',
   render: function() {
-    if (!DATA.project_total) return '<div style="padding:16px;color:#888">Tiada data Projek ditemui</div>';
+    if (!DATA.project_total) return '<div style="padding:16px;color:#888">No Project data found</div>';
     var html = '<div class="metrics">';
-    html += '<div class="metric-card"><div class="val">'+DATA.project_total+'</div><div class="lbl">Jumlah Projek</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+DATA.project_completed+'</div><div class="lbl">Selesai</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#3498db">'+DATA.project_in_progress+'</div><div class="lbl">Dalam Proses</div></div>';
-    html += '<div class="metric-card"><div class="val" style="color:#95a5a6">'+DATA.project_not_started+'</div><div class="lbl">Belum Mula</div></div>';
+    html += '<div class="metric-card"><div class="val">'+DATA.project_total+'</div><div class="lbl">Total Projects</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#2ecc71">'+DATA.project_completed+'</div><div class="lbl">Completed</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#3498db">'+DATA.project_in_progress+'</div><div class="lbl">In Progress</div></div>';
+    html += '<div class="metric-card"><div class="val" style="color:#95a5a6">'+DATA.project_not_started+'</div><div class="lbl">Not Started</div></div>';
     html += '</div>';
-    html += '<div class="chart-row"><div class="chart-box"><h3>Projek mengikut Client</h3><div id="chartProjClient"></div></div>';
+    html += '<div class="chart-row"><div class="chart-box"><h3>Projects by Client</h3><div id="chartProjClient"></div></div>';
     html += '<div class="chart-box"><h3>Status Progress</h3><div id="chartProjStatus"></div></div></div>';
     if (DATA.project_timeline && DATA.project_timeline.length) {
       html += '<div class="chart-full"><h3>PROJECT DEVELOPMENT TIMELINE</h3><div id="chartProjTimelineContainer"></div></div>';
     }
-    html += '<div class="chart-full"><h3>Butiran Projek</h3><div class="data-table-wrap"><table id="projectTable"><tr><th>Client</th><th>Title</th><th>Category</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Percentage</th></tr></table></div></div>';
+    html += '<div class="chart-full"><h3>Project Details</h3><div class="data-table-wrap"><table id="projectTable"><tr><th>Client</th><th>Title</th><th>Category</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Percentage</th></tr></table></div></div>';
     return html;
   },
   afterRender: function() {
@@ -825,7 +825,7 @@ tabDefs.push({
           template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
           font:{color:'#e0e0e0'}, yaxis:{autorange:'reversed', title:''},
           margin:{t:20,b:60,l:160,r:40}, height:Math.max(200, 30*ct.length),
-          xaxis:{title:'Tarikh'}, showlegend:false,
+          xaxis:{title:'Date'}, showlegend:false,
         };
         Plotly.newPlot('projTimeline'+ci, traces, layout,
           {responsive:true, displayModeBar:false});
@@ -849,7 +849,7 @@ function renderTickets(tickets) {
     tr.innerHTML = '<td>'+t['Ticket No']+'</td><td>'+t.Client+'</td><td>'+t['Task Type']+'</td><td>'+t.Priority+'</td><td>'+t['Ticket Status']+'</td><td>'+t.Ageing+'</td><td>'+t['Ticket Title']+'</td>';
     tbody.appendChild(tr);
   });
-  document.getElementById('searchResult').textContent = tickets.length+' rekod dipaparkan';
+  document.getElementById('searchResult').textContent = tickets.length+' records displayed';
 }
 
 function renderTab(idx) {
@@ -887,5 +887,5 @@ initTabs();
 with open(OUTPUT, 'w', encoding='utf-8') as f:
     f.write(html)
 
-print(f'Dashboard static HTML dihasilkan: {OUTPUT}')
+print(f'Dashboard static HTML generated: {OUTPUT}')
 print(f'Saiz: {os.path.getsize(OUTPUT):,} bytes')

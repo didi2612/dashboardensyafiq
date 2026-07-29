@@ -376,7 +376,8 @@ def build_project_charts(df):
         charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     if "Start date" in df.columns and "Due date" in df.columns and "Title" in df.columns:
-        valid = df.dropna(subset=["Start date", "Due date"]).copy()
+        valid = df.dropna(subset=["Start date", "Due date", "Title"]).copy()
+        valid = valid[valid["Title"].astype(str).str.strip() != ""]
         if not valid.empty:
             fig = px.timeline(
                 valid, x_start="Start date", x_end="Due date",

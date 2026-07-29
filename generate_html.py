@@ -145,9 +145,10 @@ for _, r in project_df.iterrows():
     # Collect timeline data
     sd = r.get('Start date')
     dd = r.get('Due date')
-    if pd.notna(sd) and pd.notna(dd):
+    title = str(r.get('Title', ''))
+    if pd.notna(sd) and pd.notna(dd) and title.strip():
         project_timeline.append({
-            'title': str(r.get('Title', '')),
+            'title': title,
             'client': str(r.get('Client', '')),
             'start': sd.strftime('%Y-%m-%d') if hasattr(sd, 'strftime') else str(sd),
             'due': dd.strftime('%Y-%m-%d') if hasattr(dd, 'strftime') else str(dd),

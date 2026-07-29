@@ -148,6 +148,7 @@ for _, r in project_df.iterrows():
     title = str(r.get('Title', ''))
     desc = str(r.get('Description', ''))
     desc = _re.sub(r'^\d+\.\s*', '', desc)
+    desc = desc.split('\n')[0].strip()
     label = desc if desc.strip() else title
     if pd.notna(sd) and pd.notna(dd) and label.strip():
         project_timeline.append({

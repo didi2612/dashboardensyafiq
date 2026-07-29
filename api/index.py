@@ -381,6 +381,7 @@ def build_project_charts(df):
         if "Description" in valid.columns:
             valid["Task Label"] = valid["Description"].astype(str)
             valid["Task Label"] = valid["Task Label"].str.replace(r"^\d+\.\s*", "", regex=True)
+            valid["Task Label"] = valid["Task Label"].str.split("\n").str[0].str.strip()
         else:
             valid["Task Label"] = valid["Title"].astype(str)
         if not valid.empty:

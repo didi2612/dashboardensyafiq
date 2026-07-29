@@ -3,69 +3,222 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Client Issues Dashboard</title>
+<title>Software Wizard (M) Sdn Bhd &mdash; Client Issues Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
+:root{
+  --bg:#060814;
+  --glass:rgba(255,255,255,0.045);
+  --glass-strong:rgba(255,255,255,0.08);
+  --border:rgba(255,255,255,0.09);
+  --border-strong:rgba(255,255,255,0.18);
+  --text:#e7e9f5;
+  --text-dim:#8890ab;
+  --text-faint:#5c6480;
+  --accent:#8b5cf6;
+  --accent2:#22d3ee;
+  --gradient:linear-gradient(135deg,#8b5cf6 0%,#6366f1 45%,#22d3ee 100%);
+  --success:#34d399;
+  --warning:#fbbf24;
+  --danger:#f87171;
+  --info:#60a5fa;
+  --neutral:#94a3b8;
+  --radius-lg:18px;
+  --radius:14px;
+  --radius-sm:10px;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#eef1f5;color:#101828;padding:20px}
-.container{max-width:1400px;margin:0 auto}
-h1{color:#101828;font-size:1.6rem;font-weight:700;margin-bottom:4px}
-.caption{color:#667085;font-size:0.9rem;margin-bottom:20px}
+::selection{background:rgba(139,92,246,0.35);color:#fff}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.14);border-radius:10px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.24)}
 
-.controls{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:#fff;border-radius:12px;border:1px solid #d0d5dd;align-items:end}
-.control-group{display:flex;flex-direction:column;gap:4px}
-.control-group label{font-size:0.75rem;color:#475467;font-weight:600}
-.control-group select,.control-group input{padding:6px 10px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#344054;font-size:13px;min-width:140px}
-.control-group input[type=text]{min-width:180px}
-.btn-filter{padding:8px 20px;background:#2ecc71;color:#fff;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;min-width:100px}
-.btn-filter:hover{background:#27ae60}
+body{
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  color:var(--text);
+  padding:24px;
+  min-height:100vh;
+  background-color:var(--bg);
+  background-image:
+    radial-gradient(circle at 12% -10%, rgba(139,92,246,0.28), transparent 42%),
+    radial-gradient(circle at 88% 0%, rgba(34,211,238,0.20), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(99,102,241,0.12), transparent 45%);
+  background-attachment:fixed;
+}
+.container{max-width:1440px;margin:0 auto}
 
-.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap;background:#fff;padding:6px 8px;border-radius:12px;border:1px solid #d0d5dd}
-.tab-btn{padding:7px 16px;background:transparent;border:none;color:#667085;cursor:pointer;border-radius:8px;font-size:0.85rem;font-weight:500}
-.tab-btn.active{background:#2ecc71;color:#fff;font-weight:600}
+/* ---------- Brand header ---------- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  margin-bottom:24px;padding:18px 22px;
+  background:var(--glass);border:1px solid var(--border);border-radius:var(--radius-lg);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.brand{display:flex;align-items:center;gap:14px}
+.brand-mark{
+  width:46px;height:46px;border-radius:13px;flex-shrink:0;
+  background:var(--gradient);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Sora',sans-serif;font-weight:800;font-size:1.1rem;color:#fff;
+  box-shadow:0 0 0 1px rgba(255,255,255,0.15) inset, 0 8px 24px rgba(139,92,246,0.45);
+}
+.brand-text .brand-name{
+  font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:0.2px;color:#fff;
+}
+.brand-text .brand-name span{
+  font-weight:500;color:var(--text-dim);font-size:0.85em;margin-left:4px;
+}
+.brand-text .brand-sub{
+  font-size:0.78rem;color:var(--text-dim);font-weight:500;letter-spacing:0.3px;margin-top:2px;
+  text-transform:uppercase;
+}
+.topbar-meta{
+  font-size:0.78rem;color:var(--text-faint);font-weight:500;
+  display:flex;align-items:center;gap:8px;
+}
+.topbar-meta .dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 8px var(--success);display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ---------- Filters ---------- */
+.controls{
+  display:flex;flex-wrap:wrap;gap:14px;margin-bottom:22px;padding:18px;
+  background:var(--glass);border:1px solid var(--border);border-radius:var(--radius-lg);
+  align-items:end;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.control-group{display:flex;flex-direction:column;gap:6px}
+.control-group label{font-size:0.72rem;color:var(--text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px}
+.control-group select,.control-group input{
+  padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:rgba(255,255,255,0.03);color:var(--text);font-size:13px;min-width:150px;
+  font-family:'Inter',sans-serif;transition:border-color .15s ease, box-shadow .15s ease;
+}
+.control-group select:focus,.control-group input:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,92,246,0.22);
+}
+.control-group input[type=text]{min-width:190px}
+.control-group input[type=date]{color-scheme:dark}
+.btn-filter{
+  padding:9px 26px;background:var(--gradient);color:#fff;border:none;border-radius:var(--radius-sm);
+  font-weight:700;font-size:0.85rem;cursor:pointer;min-width:110px;font-family:'Inter',sans-serif;
+  box-shadow:0 6px 18px rgba(139,92,246,0.35);transition:transform .15s ease, box-shadow .15s ease;
+}
+.btn-filter:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(139,92,246,0.5)}
+.btn-filter:active{transform:translateY(0)}
+
+/* ---------- Tabs ---------- */
+.tabs{
+  display:flex;gap:4px;margin-bottom:22px;flex-wrap:wrap;
+  background:var(--glass);padding:6px;border-radius:var(--radius);border:1px solid var(--border);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.tab-btn{
+  padding:9px 18px;background:transparent;border:none;color:var(--text-dim);cursor:pointer;
+  border-radius:9px;font-size:0.82rem;font-weight:600;font-family:'Inter',sans-serif;
+  transition:color .15s ease, background .15s ease;white-space:nowrap;
+}
+.tab-btn:hover{color:var(--text);background:rgba(255,255,255,0.05)}
+.tab-btn.active{background:var(--gradient);color:#fff;box-shadow:0 4px 14px rgba(139,92,246,0.4)}
 .tab-pane{display:none}
-.tab-pane.active{display:block}
+.tab-pane.active{display:block;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
-.metrics{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
-.metric-card{flex:1;min-width:140px;padding:16px 20px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
-.metric-card .val{font-size:1.8rem;font-weight:700;color:#101828}
-.metric-card .lbl{font-size:0.8rem;color:#475467;margin-top:2px;font-weight:500}
+/* ---------- Metrics ---------- */
+.metrics{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.metric-card{
+  flex:1;min-width:160px;padding:18px 22px;
+  background:var(--glass);border:1px solid var(--border);border-radius:var(--radius);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  position:relative;overflow:hidden;transition:transform .15s ease, border-color .15s ease;
+}
+.metric-card::before{
+  content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--gradient);opacity:0.85;
+}
+.metric-card:hover{transform:translateY(-2px);border-color:var(--border-strong)}
+.metric-card .val{font-family:'Sora',sans-serif;font-size:1.9rem;font-weight:700;color:var(--text);letter-spacing:-0.5px}
+.metric-card .lbl{font-size:0.78rem;color:var(--text-dim);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
 
+/* ---------- Chart containers ---------- */
 .chart-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
-.chart-box{flex:1;min-width:300px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:12px;overflow:hidden}
-.chart-box h3{font-size:1.1rem;font-weight:600;color:#344054;margin-bottom:8px}
-.chart-full{background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:12px;margin-bottom:16px}
-.chart-full h3{font-size:1.1rem;font-weight:600;color:#344054;margin-bottom:8px}
+.chart-box{
+  flex:1;min-width:320px;background:var(--glass);border:1px solid var(--border);
+  border-radius:var(--radius);padding:14px;overflow:hidden;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.chart-box h3{font-family:'Sora',sans-serif;font-size:1rem;font-weight:600;color:var(--text);margin-bottom:10px}
+.chart-full{
+  background:var(--glass);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.chart-full h3{font-family:'Sora',sans-serif;font-size:1rem;font-weight:600;color:var(--text);margin-bottom:10px}
 
+/* ---------- Tables ---------- */
 table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e4e7ec}
-th{background:#f2f4f7;color:#475467;font-weight:600;position:sticky;top:0}
-td{color:#344054}
-.data-table-wrap{max-height:500px;overflow:auto;border:1px solid #e4e7ec;border-radius:10px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)}
+th{background:rgba(255,255,255,0.03);color:var(--text-dim);font-weight:700;position:sticky;top:0;
+   text-transform:uppercase;font-size:0.72rem;letter-spacing:0.4px;backdrop-filter:blur(8px)}
+td{color:var(--text)}
+tbody tr{transition:background .1s ease}
+tbody tr:hover{background:rgba(255,255,255,0.035)}
+.data-table-wrap{max-height:500px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm)}
 
-.client-section{margin-bottom:20px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:16px}
-.client-section h4{font-size:1rem;font-weight:600;color:#101828;margin-bottom:12px}
-.client-section summary{cursor:pointer;padding:8px 12px;background:#f2f4f7;border-radius:8px;font-size:0.85rem;color:#2ecc71;font-weight:600;margin-bottom:4px}
-.client-section details{margin-bottom:6px}
+/* ---------- Client sections / collapsibles ---------- */
+.client-section{
+  margin-bottom:18px;background:var(--glass);border:1px solid var(--border);
+  border-radius:var(--radius);padding:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.client-section h4{font-family:'Sora',sans-serif;font-size:1rem;font-weight:600;color:var(--text);margin-bottom:14px}
+.client-section summary{
+  cursor:pointer;padding:10px 14px;background:rgba(139,92,246,0.10);border:1px solid rgba(139,92,246,0.25);
+  border-radius:var(--radius-sm);font-size:0.83rem;color:#c4b5fd;font-weight:600;margin-bottom:6px;
+  list-style:none;
+}
+.client-section summary::-webkit-details-marker{display:none}
+.client-section summary:hover{background:rgba(139,92,246,0.16)}
+.client-section details{margin-bottom:8px}
 
-.alert{background:#fef3f2;border:1px solid #fecdca;border-radius:10px;padding:16px;margin-bottom:16px;color:#b42318}
-.alert-warning{background:#fffaeb;border:1px solid #fedf89;color:#b54708}
-.alert-info{background:#eff8ff;border:1px solid #b2ddff;color:#175cd3}
+/* ---------- Alerts ---------- */
+.alert{
+  border-radius:var(--radius-sm);padding:16px 18px;margin-bottom:16px;font-size:0.88rem;
+  border:1px solid rgba(248,113,113,0.3);background:rgba(248,113,113,0.08);color:#fca5a5;
+}
+.alert-warning{border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.08);color:#fcd34d}
+.alert-info{border-color:rgba(96,165,250,0.3);background:rgba(96,165,250,0.08);color:#93c5fd}
 
-.debug-box{background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:16px;margin-bottom:16px;font-size:0.85rem}
-.debug-box summary{cursor:pointer;font-weight:600;color:#344054}
-.debug-box .content{margin-top:12px;color:#667085}
+/* ---------- Debug box ---------- */
+.debug-box{
+  background:var(--glass);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 18px;margin-bottom:16px;font-size:0.85rem;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.debug-box summary{cursor:pointer;font-weight:600;color:var(--text-dim);list-style:none}
+.debug-box summary::-webkit-details-marker{display:none}
+.debug-box summary::before{content:"\25B8  ";color:var(--accent2)}
+.debug-box[open] summary::before{content:"\25BE  "}
+.debug-box .content{margin-top:12px;color:var(--text-faint)}
 .debug-box .content p{margin:4px 0}
+.debug-box code{color:var(--accent2);background:rgba(34,211,238,0.08);padding:1px 6px;border-radius:5px;font-size:0.85em}
 
-.sidebar-hr{margin:0.8rem 0;border:none;border-top:1px solid #d0d5dd}
-hr{border-color:#d0d5dd;margin:1.2rem 0}
-.st-alert{border-radius:10px;border:1px solid #d0d5dd}
+.sidebar-hr{margin:0.8rem 0;border:none;border-top:1px solid var(--border)}
+hr{border:none;border-top:1px solid var(--border);margin:1.4rem 0}
+.st-alert{border-radius:var(--radius-sm);border:1px solid var(--border)}
 </style>
 </head>
 <body>
 <div class="container">
-<h1>Client Issues Dashboard</h1>
-<div class="caption">Dynamic Multi-File Issue Tracking &mdash; {{ now }}</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">SW</div>
+    <div class="brand-text">
+      <div class="brand-name">Software Wizard <span>(M) Sdn Bhd</span></div>
+      <div class="brand-sub">Client Issues Intelligence Dashboard</div>
+    </div>
+  </div>
+  <div class="topbar-meta"><span class="dot"></span>Last synced &mdash; {{ now }}</div>
+</div>
 
 <form method="GET" action="/" class="controls" id="filters">
   {% if filter_options.min_date %}
@@ -151,7 +304,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
     <p><strong>Sources:</strong> <code>{{ data_info.source_files }}</code></p>
     {% endif %}
     {% if data_info.load_errors %}
-    <p style="color:#b42318"><strong>Load Errors:</strong></p>
+    <p style="color:var(--danger)"><strong>Load Errors:</strong></p>
     {% for err in data_info.load_errors %}
     <p>- {{ err }}</p>
     {% endfor %}
@@ -186,10 +339,10 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 <div class="tab-pane active" id="tab-0">
   <div class="metrics">
     <div class="metric-card"><div class="val">{{ overview_charts.metrics.total }}</div><div class="lbl">Total Tickets</div></div>
-    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ overview_charts.metrics.completed }}</div><div class="lbl">Completed <span style="color:#667085;font-size:0.75rem">({{ overview_charts.metrics.completed_pct }})</span></div></div>
-    <div class="metric-card"><div class="val" style="color:#f39c12">{{ overview_charts.metrics.pending }}</div><div class="lbl">Pending <span style="color:#667085;font-size:0.75rem">({{ overview_charts.metrics.pending_pct }})</span></div></div>
-    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ overview_charts.metrics.in_progress }}</div><div class="lbl">In Progress <span style="color:#667085;font-size:0.75rem">({{ overview_charts.metrics.in_progress_pct }})</span></div></div>
-    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ overview_charts.metrics.sla_breach }}</div><div class="lbl">SLA Breaches</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--success)">{{ overview_charts.metrics.completed }}</div><div class="lbl">Completed <span style="color:var(--text-dim);font-size:0.75rem;text-transform:none">({{ overview_charts.metrics.completed_pct }})</span></div></div>
+    <div class="metric-card"><div class="val" style="color:var(--warning)">{{ overview_charts.metrics.pending }}</div><div class="lbl">Pending <span style="color:var(--text-dim);font-size:0.75rem;text-transform:none">({{ overview_charts.metrics.pending_pct }})</span></div></div>
+    <div class="metric-card"><div class="val" style="color:var(--danger)">{{ overview_charts.metrics.in_progress }}</div><div class="lbl">In Progress <span style="color:var(--text-dim);font-size:0.75rem;text-transform:none">({{ overview_charts.metrics.in_progress_pct }})</span></div></div>
+    <div class="metric-card"><div class="val" style="color:var(--danger)">{{ overview_charts.metrics.sla_breach }}</div><div class="lbl">SLA Breaches</div></div>
     <div class="metric-card"><div class="val">{{ overview_charts.metrics.avg_days if overview_charts.metrics.avg_days else "N/A" }}</div><div class="lbl">Avg Days to Complete</div></div>
   </div>
   <hr>
@@ -284,9 +437,9 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 
 <div class="tab-pane" id="tab-6">
   <div class="metrics">
-    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ sla_charts.compliance_rate }}%</div><div class="lbl">SLA Compliance Rate</div></div>
-    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ sla_charts.total_breaches }}</div><div class="lbl">SLA Breaches</div></div>
-    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ sla_charts.total_compliant }}</div><div class="lbl">SLA Compliant</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--success)">{{ sla_charts.compliance_rate }}%</div><div class="lbl">SLA Compliance Rate</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--danger)">{{ sla_charts.total_breaches }}</div><div class="lbl">SLA Breaches</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--success)">{{ sla_charts.total_compliant }}</div><div class="lbl">SLA Compliant</div></div>
   </div>
   <div class="chart-row">
     <div class="chart-box">{{ sla_charts.sla_gauge|safe }}</div>
@@ -301,16 +454,16 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 </div>
 
 <div class="tab-pane" id="tab-7">
-  <p style="color:#667085;margin-bottom:12px"><strong>Total records: {{ data_info.total_filtered }}</strong></p>
+  <p style="color:var(--text-dim);margin-bottom:12px"><strong>Total records: {{ data_info.total_filtered }}</strong></p>
   <div class="data-table-wrap">{{ detail_table|safe }}</div>
 </div>
 
 <div class="tab-pane" id="tab-8">
   {% if ageing_list_data.total %}
-  <p style="color:#667085;margin-bottom:12px"><strong>Total tickets with ageing: {{ ageing_list_data.total }}</strong></p>
+  <p style="color:var(--text-dim);margin-bottom:12px"><strong>Total tickets with ageing: {{ ageing_list_data.total }}</strong></p>
   {% for bucket, clients in ageing_list_data.buckets.items() %}
   <div class="client-section">
-    <h4>{{ bucket }} &mdash; 
+    <h4>{{ bucket }} &mdash;
       {% set ns = namespace(count=0) %}
       {% for c, d in clients.items() %}{% set ns.count = ns.count + d.count %}{% endfor %}
       {{ ns.count }} tickets
@@ -349,10 +502,10 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   {% if warranty_charts and warranty_charts.metrics %}
   <div class="metrics">
     <div class="metric-card"><div class="val">{{ warranty_charts.metrics.total }}</div><div class="lbl">Total Warranty Tickets</div></div>
-    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ warranty_charts.metrics.completed }}</div><div class="lbl">Completed</div></div>
-    <div class="metric-card"><div class="val" style="color:#f39c12">{{ warranty_charts.metrics.pending }}</div><div class="lbl">Pending</div></div>
-    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ warranty_charts.metrics.in_progress }}</div><div class="lbl">In Progress</div></div>
-    <div class="metric-card"><div class="val" style="color:#e74c3c">{{ warranty_charts.metrics.sla_breach }}</div><div class="lbl">SLA Breaches</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--success)">{{ warranty_charts.metrics.completed }}</div><div class="lbl">Completed</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--warning)">{{ warranty_charts.metrics.pending }}</div><div class="lbl">Pending</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--danger)">{{ warranty_charts.metrics.in_progress }}</div><div class="lbl">In Progress</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--danger)">{{ warranty_charts.metrics.sla_breach }}</div><div class="lbl">SLA Breaches</div></div>
   </div>
   <div class="chart-row">
     <div class="chart-box">{{ warranty_charts.status_pie|safe }}</div>
@@ -372,9 +525,9 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   {% if has_project and project_charts and project_charts.metrics %}
   <div class="metrics">
     <div class="metric-card"><div class="val">{{ project_charts.metrics.total }}</div><div class="lbl">Total Projects</div></div>
-    <div class="metric-card"><div class="val" style="color:#2ecc71">{{ project_charts.metrics.completed }}</div><div class="lbl">Completed</div></div>
-    <div class="metric-card"><div class="val" style="color:#3498db">{{ project_charts.metrics.in_progress }}</div><div class="lbl">In Progress</div></div>
-    <div class="metric-card"><div class="val" style="color:#95a5a6">{{ project_charts.metrics.not_started }}</div><div class="lbl">Not Started</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--success)">{{ project_charts.metrics.completed }}</div><div class="lbl">Completed</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--info)">{{ project_charts.metrics.in_progress }}</div><div class="lbl">In Progress</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--neutral)">{{ project_charts.metrics.not_started }}</div><div class="lbl">Not Started</div></div>
   </div>
   <div class="chart-row">
     <div class="chart-box">{{ project_charts.client_bar|safe }}</div>

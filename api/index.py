@@ -378,16 +378,33 @@ def build_project_charts(df):
     if "Start date" in df.columns and "Due date" in df.columns and "Title" in df.columns:
         valid = df.dropna(subset=["Start date", "Due date", "Title"]).copy()
         valid = valid[valid["Title"].astype(str).str.strip() != ""]
+        if "Description" in valid.columns:
+            valid["Task Label"] = valid["Description"].astype(str)
+            valid["Task Label"] = valid["Task Label"].str.replace(r"^\d+\.\s*", "", regex=True)
+        else:
+            valid["Task Label"] = valid["Title"].astype(str)
         if not valid.empty:
-            fig = px.timeline(
-                valid, x_start="Start date", x_end="Due date",
-                y="Title", color="Client",
-                title="PROJECT DEVELOPMENT TIMELINE",
-                color_discrete_sequence=px.colors.qualitative.Plotly,
-            )
-            fig.update_yaxes(autorange="reversed")
-            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), height=max(400, 25*len(valid)))
-            charts["timeline_chart"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+            timeline_charts_html = ""
+            if "Client" in valid.columns:
+                for client in sorted(valid["Client"].dropna().unique()):
+                    cdf = valid[valid["Client"] == client]
+                    if cdf.empty:
+                        continue
+                    fig = px.timeline(
+                        cdf, x_start="Start date", x_end="Due date",
+                        y="Task Label", color="Client",
+                        title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
+                        color_discrete_sequence=px.colors.qualitative.Plotly,
+                    )
+                    fig.update_yaxes(autorange="reversed", title=None)
+                    fig.update_xaxes(title="Tarikh")
+                    fig.update_layout(
+                        template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#374151"), showlegend=False,
+                        height=max(200, 30*len(cdf)),
+                    )
+                    timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, config={"displayModeBar": False})}</div>'
+            charts["timeline_chart"] = timeline_charts_html
 
     display_cols_p = ["Client", "Title", "Category", "Progress", "Priority", "Start date", "Due date", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
     avail_p = [c for c in display_cols_p if c in df.columns]

@@ -1,4 +1,4 @@
-import pandas as pd, os, glob, json, base64, io, numpy as np
+import pandas as pd, os, glob, json, base64, io, numpy as np, re as _re
 
 DATA_DIR = r'D:\Work\Opencode analysis'
 HEADER_ROW = 1
@@ -146,9 +146,12 @@ for _, r in project_df.iterrows():
     sd = r.get('Start date')
     dd = r.get('Due date')
     title = str(r.get('Title', ''))
-    if pd.notna(sd) and pd.notna(dd) and title.strip():
+    desc = str(r.get('Description', ''))
+    desc = _re.sub(r'^\d+\.\s*', '', desc)
+    label = desc if desc.strip() else title
+    if pd.notna(sd) and pd.notna(dd) and label.strip():
         project_timeline.append({
-            'title': title,
+            'title': label,
             'client': str(r.get('Client', '')),
             'start': sd.strftime('%Y-%m-%d') if hasattr(sd, 'strftime') else str(sd),
             'due': dd.strftime('%Y-%m-%d') if hasattr(dd, 'strftime') else str(dd),
@@ -774,7 +777,7 @@ tabDefs.push({
     html += '<div class="chart-row"><div class="chart-box"><h3>Projek mengikut Client</h3><div id="chartProjClient"></div></div>';
     html += '<div class="chart-box"><h3>Status Progress</h3><div id="chartProjStatus"></div></div></div>';
     if (DATA.project_timeline && DATA.project_timeline.length) {
-      html += '<div class="chart-full"><h3>PROJECT DEVELOPMENT TIMELINE</h3><div id="chartProjTimeline"></div></div>';
+      html += '<div class="chart-full"><h3>PROJECT DEVELOPMENT TIMELINE</h3><div id="chartProjTimelineContainer"></div></div>';
     }
     html += '<div class="chart-full"><h3>Butiran Projek</h3><div class="data-table-wrap"><table id="projectTable"><tr><th>Client</th><th>Title</th><th>Category</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Percentage</th></tr></table></div></div>';
     return html;
@@ -800,27 +803,32 @@ tabDefs.push({
       var plotlyColors = ['#636efa','#EF553B','#00cc96','#ab63fa','#FFA15A','#19d3f3','#FF6692','#B6E880','#FF97FF','#FECB52'];
       var colorMap = {};
       uniqueClients.forEach(function(c, i){colorMap[c]=plotlyColors[i%plotlyColors.length];});
-      var traces = [];
-      uniqueClients.forEach(function(c) {
-        var ct = tdata.filter(function(d){return d.client===c;});
-        traces.push({
+      var container = document.getElementById('chartProjTimelineContainer');
+      container.innerHTML = '';
+      uniqueClients.forEach(function(client, ci) {
+        var ct = tdata.filter(function(d){return d.client===client;});
+        if (!ct.length) return;
+        var section = document.createElement('div');
+        section.className = 'client-section';
+        section.innerHTML = '<h4 style="color:#2ecc71;margin-bottom:8px">'+client+'</h4><div id="projTimeline'+ci+'"></div>';
+        container.appendChild(section);
+        var traces = [{
           x: ct.map(function(d){return d.due;}),
           y: ct.map(function(d){return d.title;}),
           base: ct.map(function(d){return d.start;}),
-          type: 'bar', orientation: 'h', name: c,
-          marker: {color: colorMap[c]},
-          width: 0.6,
-        });
+          type: 'bar', orientation: 'h',
+          marker: {color: colorMap[client]},
+          width: 0.6, name: client,
+        }];
+        var layout = {
+          template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+          font:{color:'#e0e0e0'}, yaxis:{autorange:'reversed', title:''},
+          margin:{t:20,b:60,l:160,r:40}, height:Math.max(200, 30*ct.length),
+          xaxis:{title:'Tarikh'}, showlegend:false,
+        };
+        Plotly.newPlot('projTimeline'+ci, traces, layout,
+          {responsive:true, displayModeBar:false});
       });
-      var layout = {
-        template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-        font:{color:'#e0e0e0'}, barmode:'stack', yaxis:{autorange:'reversed'},
-        margin:{t:20,b:60,l:200,r:40}, height:Math.max(400, 25*tdata.length),
-        xaxis:{title:'Tarikh'},
-        legend:{orientation:'h', yanchor:'bottom', y:-0.3}
-      };
-      Plotly.newPlot('chartProjTimeline', traces, layout,
-        {responsive:true, displayModeBar:false});
     }
     var tbody = document.getElementById('projectTable');
     DATA.project_tasks.forEach(function(t) {

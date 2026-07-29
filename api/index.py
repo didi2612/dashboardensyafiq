@@ -373,17 +373,18 @@ def build_project_charts(df):
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["status_pie"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
-    if "Title" in df.columns and "Percentage" in df.columns:
-        valid = df.dropna(subset=["Percentage"]).copy()
+    if "Start date" in df.columns and "Due date" in df.columns and "Title" in df.columns:
+        valid = df.dropna(subset=["Start date", "Due date"]).copy()
         if not valid.empty:
-            valid = valid.sort_values("Percentage", ascending=True)
-            valid["Label"] = valid["Title"] + " - " + valid["Client"].astype(str)
-            fig = px.bar(valid, x="Percentage", y="Label", orientation="h",
-                          title="Peratusan Penyelesaian mengikut Tugasan",
-                          color="Percentage", color_continuous_scale=["#e74c3c", "#f39c12", "#2ecc71"],
-                          text="Percentage")
-            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), yaxis=dict(autorange="reversed"), height=max(400, 30*len(valid)))
-            charts["progress_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+            fig = px.timeline(
+                valid, x_start="Start date", x_end="Due date",
+                y="Title", color="Client",
+                title="Timeline Projek mengikut Client",
+                color_discrete_sequence=px.colors.qualitative.Plotly,
+            )
+            fig.update_yaxes(autorange="reversed")
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), height=max(400, 25*len(valid)))
+            charts["timeline_chart"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     display_cols_p = ["Client", "Title", "Category", "Progress", "Priority", "Start date", "Due date", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
     avail_p = [c for c in display_cols_p if c in df.columns]

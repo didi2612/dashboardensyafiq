@@ -131,6 +131,7 @@ if 'Title' in project_df.columns and 'Percentage' in project_df.columns:
         })
 
 project_tasks = []
+project_timeline = []
 for _, r in project_df.iterrows():
     task = {}
     for c in ['Client', 'Title', 'Category', 'Progress', 'Priority', 'Assigned to', 'Status Progress', 'Percentage', 'Overall Progress Task (%)']:
@@ -139,6 +140,16 @@ for _, r in project_df.iterrows():
             val = r[c].strftime('%d/%m/%Y') if hasattr(r[c], 'strftime') else str(r[c])
         task[c] = str(val) if not pd.isna(val) else ''
     project_tasks.append(task)
+    # Collect timeline data
+    sd = r.get('Start date')
+    dd = r.get('Due date')
+    if pd.notna(sd) and pd.notna(dd):
+        project_timeline.append({
+            'title': str(r.get('Title', '')),
+            'client': str(r.get('Client', '')),
+            'start': sd.strftime('%Y-%m-%d') if hasattr(sd, 'strftime') else str(sd),
+            'due': dd.strftime('%Y-%m-%d') if hasattr(dd, 'strftime') else str(dd),
+        })
 
 # ---- COMPUTE AGGREGATIONS ----
 total_records = len(df)
@@ -227,6 +238,7 @@ data_json = json.dumps({
     'project_clients': project_clients,
     'project_client_counts': {str(k):int(v) for k,v in project_client_counts.items()},
     'project_progress': project_progress_data,
+    'project_timeline': project_timeline,
     'project_tasks': project_tasks,
 }, indent=2)
 
@@ -758,8 +770,8 @@ tabDefs.push({
     html += '</div>';
     html += '<div class="chart-row"><div class="chart-box"><h3>Projek mengikut Client</h3><div id="chartProjClient"></div></div>';
     html += '<div class="chart-box"><h3>Status Progress</h3><div id="chartProjStatus"></div></div></div>';
-    if (DATA.project_progress && DATA.project_progress.length) {
-      html += '<div class="chart-full"><h3>Peratusan Penyelesaian</h3><div id="chartProjProgress"></div></div>';
+    if (DATA.project_timeline && DATA.project_timeline.length) {
+      html += '<div class="chart-full"><h3>Timeline Projek</h3><div id="chartProjTimeline"></div></div>';
     }
     html += '<div class="chart-full"><h3>Butiran Projek</h3><div class="data-table-wrap"><table id="projectTable"><tr><th>Client</th><th>Title</th><th>Category</th><th>Priority</th><th>Assigned To</th><th>Status</th><th>Percentage</th></tr></table></div></div>';
     return html;
@@ -779,16 +791,32 @@ tabDefs.push({
       {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
        font:{color:'#e0e0e0'}, margin:{t:0,b:0,l:0,r:0}},
       {responsive:true, displayModeBar:false});
-    if (DATA.project_progress && DATA.project_progress.length) {
-      var pdata = DATA.project_progress;
-      Plotly.newPlot('chartProjProgress', [{x:pdata.map(function(d){return d.percentage;}),
-        y:pdata.map(function(d){return d.label;}), type:'bar', orientation:'h',
-        marker:{color:pdata.map(function(d){
-          if (d.percentage>=80) return '#2ecc71'; if (d.percentage>=50) return '#f39c12'; return '#e74c3c';
-        })}, text:pdata.map(function(d){return d.percentage+'%';}), textposition:'outside'}],
-        {template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-         font:{color:'#e0e0e0'}, xaxis:{range:[0,100]}, yaxis:{autorange:'reversed'},
-         margin:{t:20,b:40,l:200,r:40}, height:Math.max(400, 30*pdata.length)},
+    if (DATA.project_timeline && DATA.project_timeline.length) {
+      var tdata = DATA.project_timeline;
+      var uniqueClients = [...new Set(tdata.map(function(d){return d.client;}))];
+      var plotlyColors = ['#636efa','#EF553B','#00cc96','#ab63fa','#FFA15A','#19d3f3','#FF6692','#B6E880','#FF97FF','#FECB52'];
+      var colorMap = {};
+      uniqueClients.forEach(function(c, i){colorMap[c]=plotlyColors[i%plotlyColors.length];});
+      var traces = [];
+      uniqueClients.forEach(function(c) {
+        var ct = tdata.filter(function(d){return d.client===c;});
+        traces.push({
+          x: ct.map(function(d){return d.due;}),
+          y: ct.map(function(d){return d.title;}),
+          base: ct.map(function(d){return d.start;}),
+          type: 'bar', orientation: 'h', name: c,
+          marker: {color: colorMap[c]},
+          width: 0.6,
+        });
+      });
+      var layout = {
+        template:'plotly_dark', paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+        font:{color:'#e0e0e0'}, barmode:'stack', yaxis:{autorange:'reversed'},
+        margin:{t:20,b:60,l:200,r:40}, height:Math.max(400, 25*tdata.length),
+        xaxis:{title:'Tarikh'},
+        legend:{orientation:'h', yanchor:'bottom', y:-0.3}
+      };
+      Plotly.newPlot('chartProjTimeline', traces, layout,
         {responsive:true, displayModeBar:false});
     }
     var tbody = document.getElementById('projectTable');

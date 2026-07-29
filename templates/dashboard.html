@@ -380,8 +380,8 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
     <div class="chart-box">{{ project_charts.client_bar|safe }}</div>
     <div class="chart-box">{{ project_charts.status_pie|safe }}</div>
   </div>
-  {% if project_charts.progress_bar %}
-  <div class="chart-full"><h3>Peratusan Penyelesaian</h3>{{ project_charts.progress_bar|safe }}</div>
+  {% if project_charts.timeline_chart %}
+  <div class="chart-full"><h3>Timeline Projek</h3>{{ project_charts.timeline_chart|safe }}</div>
   {% endif %}
   <div class="chart-full">
     <h3>Butiran Projek</h3>

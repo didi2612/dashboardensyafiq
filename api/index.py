@@ -321,26 +321,16 @@ def build_warranty_charts(df):
         tc.columns = ["Task Type", "Count"]
         fig = px.bar(tc, x="Task Type", y="Count", title="Warranty Tickets by Task Type",
                       color="Task Type", text="Count")
-<<<<<<< HEAD
-        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-        charts["task_type_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
-=======
         fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False, xaxis_tickangle=-45)
         charts["task_type_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
->>>>>>> 825efc7d307cf3cc8df6ca47201686e1b27cd126
 
     if "Project" in warranty_df.columns:
         pc = warranty_df["Project"].value_counts().reset_index()
         pc.columns = ["Project", "Count"]
         fig = px.bar(pc, x="Project", y="Count", title="Warranty Tickets by Project",
                       color="Project", text="Count")
-<<<<<<< HEAD
-        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-        charts["project_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
-=======
         fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False, xaxis_tickangle=-45)
         charts["project_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
->>>>>>> 825efc7d307cf3cc8df6ca47201686e1b27cd126
 
     display_cols = ["Ticket No", "Task Type", "Project", "Company", "Ticket Title", "Priority", "Ticket Status", "Ticket Created Date", "Days"]
     avail = [c for c in display_cols if c in warranty_df.columns]
@@ -376,13 +366,8 @@ def build_project_charts(df):
         cc.columns = ["Client", "Count"]
         fig = px.bar(cc, x="Client", y="Count", title="Projects by Client",
                       color="Client", text="Count")
-<<<<<<< HEAD
-        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
-        charts["client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
-=======
         fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False)
         charts["client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
->>>>>>> 825efc7d307cf3cc8df6ca47201686e1b27cd126
 
     if "Status Progress" in df.columns:
         valid_status = df.dropna(subset=["Status Progress"])

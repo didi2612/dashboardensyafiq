@@ -201,7 +201,6 @@ tbody tr:hover{background:rgba(255,255,255,0.035)}
 .debug-box .content p{margin:4px 0}
 .debug-box code{color:var(--accent2);background:rgba(34,211,238,0.08);padding:1px 6px;border-radius:5px;font-size:0.85em}
 
-<<<<<<< HEAD
 .sidebar-hr{margin:0.8rem 0;border:none;border-top:1px solid #d0d5dd}
 hr{border-color:#d0d5dd;margin:1.2rem 0}
 .st-alert{border-radius:10px;border:1px solid #d0d5dd}
@@ -222,11 +221,6 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 .save-toast.success{background:#2ecc71;color:#fff}
 .save-toast.error{background:#e74c3c;color:#fff}
 @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-=======
-.sidebar-hr{margin:0.8rem 0;border:none;border-top:1px solid var(--border)}
-hr{border:none;border-top:1px solid var(--border);margin:1.4rem 0}
-.st-alert{border-radius:var(--radius-sm);border:1px solid var(--border)}
->>>>>>> 825efc7d307cf3cc8df6ca47201686e1b27cd126
 </style>
 </head>
 <body>
@@ -477,7 +471,6 @@ hr{border:none;border-top:1px solid var(--border);margin:1.4rem 0}
 </div>
 
 <div class="tab-pane" id="tab-7">
-<<<<<<< HEAD
   <div class="edit-bar">
     <span style="color:#667085;font-weight:600">Total records: {{ data_info.total_filtered }}</span>
     <span style="flex:1"></span>
@@ -485,37 +478,40 @@ hr{border:none;border-top:1px solid var(--border);margin:1.4rem 0}
     <button class="btn-cancel" id="cancelBtn" onclick="cancelEdit()" style="display:none">Cancel</button>
     <button class="btn-edit" id="editBtn" onclick="toggleEdit()">Enable Editing</button>
   </div>
-  <div class="data-table-wrap" id="detail-table-wrap">
-    <table id="detail-table">
-      <thead>
-        <tr>
-          {% if detail_data and detail_data[0] is defined %}
-          {% set skip_cols = ['_row_idx', 'Source File'] %}
-          {% for key in detail_data[0].keys() %}
-            {% if key not in skip_cols %}
-              <th>{{ key }}</th>
-            {% endif %}
-          {% endfor %}
-          {% endif %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in detail_data %}
-        <tr data-row-idx="{{ row.get('_row_idx', '') }}" data-source="{{ row.get('Source File', '') }}" data-sheet="{{ row.get('Client', '') }}">
-          {% for key, val in row.items() %}
-            {% if key not in ['_row_idx', 'Source File'] %}
-              <td class="editable-cell" data-col="{{ key }}">{{ val if val is not none and val != 'None' and val != 'nan' else '' }}</td>
-            {% endif %}
-          {% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {% set skip_cols = ['_row_idx', 'Source File'] %}
+  {% for client, rows in detail_by_client.items() %}
+  <div class="client-section">
+    <details>
+      <summary>{{ client }} ({{ rows|length }} tickets)</summary>
+      <div class="data-table-wrap" style="margin-top:8px">
+        <table class="detail-table" data-client="{{ client }}">
+          <thead>
+            <tr>
+              {% if rows[0] is defined %}
+              {% for key in rows[0].keys() %}
+                {% if key not in skip_cols and key != 'Client' %}
+                  <th>{{ key }}</th>
+                {% endif %}
+              {% endfor %}
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr data-row-idx="{{ row.get('_row_idx', '') }}" data-source="{{ row.get('Source File', '') }}" data-sheet="{{ row.get('Client', '') }}">
+              {% for key, val in row.items() %}
+                {% if key not in skip_cols and key != 'Client' %}
+                  <td class="editable-cell" data-col="{{ key }}">{{ val if val is not none and val != 'None' and val != 'nan' else '' }}</td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
   </div>
-=======
-  <p style="color:var(--text-dim);margin-bottom:12px"><strong>Total records: {{ data_info.total_filtered }}</strong></p>
-  <div class="data-table-wrap">{{ detail_table|safe }}</div>
->>>>>>> 825efc7d307cf3cc8df6ca47201686e1b27cd126
+  {% endfor %}
 </div>
 
 <div class="tab-pane" id="tab-8">
@@ -527,11 +523,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.4rem 0}
     <button class="btn-edit" id="editBtn8" onclick="toggleEdit8()">Enable Editing</button>
   </div>
   {% if ageing_list_data.total %}
-<<<<<<< HEAD
   {% set skip_cols_8 = ['_row_idx', 'Source File'] %}
-=======
-  <p style="color:var(--text-dim);margin-bottom:12px"><strong>Total tickets with ageing: {{ ageing_list_data.total }}</strong></p>
->>>>>>> 825efc7d307cf3cc8df6ca47201686e1b27cd126
   {% for bucket, clients in ageing_list_data.buckets.items() %}
   <div class="client-section">
     <h4>{{ bucket }} &mdash;
@@ -854,8 +846,98 @@ function showToast(msg, type) {
   setTimeout(function() { toast.style.display = 'none'; }, 3000);
 }
 
+function makeEditableMulti(tableClass, saveBtnId, cancelBtnId, editBtnId, tabId) {
+  var editMode = false;
+
+  function getTables() {
+    return document.querySelectorAll('#' + tabId + ' .' + tableClass);
+  }
+
+  function toggle() {
+    editMode = !editMode;
+    var btn = document.getElementById(editBtnId);
+    btn.textContent = editMode ? 'Exit Edit Mode' : 'Enable Editing';
+    btn.classList.toggle('active', editMode);
+    document.getElementById(saveBtnId).style.display = editMode ? 'inline-block' : 'none';
+    document.getElementById(cancelBtnId).style.display = editMode ? 'inline-block' : 'none';
+
+    getTables().forEach(function(t) {
+      t.classList.toggle('edit-mode', editMode);
+      if (editMode) {
+        t.querySelectorAll('td.editable-cell').forEach(function(cell) {
+          var val = cell.textContent.trim();
+          cell.innerHTML = '<input type="text" value="' + escapeHtml(val) + '" data-original="' + escapeHtml(val) + '">';
+          var inp = cell.querySelector('input');
+          inp.addEventListener('input', function() {
+            this.classList.toggle('changed', this.value !== this.getAttribute('data-original'));
+          });
+        });
+      } else {
+        t.querySelectorAll('td.editable-cell input').forEach(function(inp) {
+          inp.parentNode.textContent = inp.value;
+        });
+      }
+    });
+  }
+
+  function save() {
+    var pending = [];
+    getTables().forEach(function(t) {
+      t.querySelectorAll('td.editable-cell input').forEach(function(inp) {
+        var original = inp.getAttribute('data-original');
+        if (inp.value !== original) {
+          var td = inp.parentNode, tr = td.parentNode;
+          pending.push({
+            source_file: tr.getAttribute('data-source'),
+            sheet: tr.getAttribute('data-sheet'),
+            row_idx: tr.getAttribute('data-row-idx'),
+            column: td.getAttribute('data-col'),
+            value: inp.value
+          });
+        }
+      });
+    });
+
+    if (pending.length === 0) {
+      showToast('No changes to save', 'success');
+      toggle();
+      return;
+    }
+
+    var saved = 0, errors = [];
+    pending.forEach(function(item, idx) {
+      fetch('/api/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(item)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(result) {
+        if (result.success) saved++;
+        else errors.push(item.column + ': ' + (result.error || 'unknown'));
+      })
+      .catch(function(e) { errors.push(item.column + ': ' + e.message); })
+      .finally(function() {
+        if (idx === pending.length - 1) {
+          setTimeout(function() {
+            showToast(errors.length === 0 ? 'Saved ' + saved + ' change(s) successfully!' : 'Saved ' + saved + '/' + pending.length + '. Errors: ' + errors.join('; '), errors.length === 0 ? 'success' : 'error');
+            toggle();
+          }, 500);
+        }
+      });
+    });
+  }
+
+  function cancel() {
+    if (editMode) toggle();
+  }
+
+  document.getElementById(editBtnId).onclick = toggle;
+  document.getElementById(saveBtnId).onclick = save;
+  document.getElementById(cancelBtnId).onclick = cancel;
+}
+
 var editTables = [
-  ['detail-table', 'saveBtn', 'cancelBtn', 'editBtn'],
   ['warranty-table', 'saveBtn9', 'cancelBtn9', 'editBtn9'],
   ['project-table', 'saveBtn10', 'cancelBtn10', 'editBtn10']
 ];
@@ -865,6 +947,10 @@ editTables.forEach(function(args) {
     makeEditable(args[0], args[1], args[2], args[3]);
   }
 });
+
+if (document.querySelector('.detail-table')) {
+  makeEditableMulti('detail-table', 'saveBtn', 'cancelBtn', 'editBtn', 'tab-7');
+}
 
 function toggleEdit() { return false; }
 function saveChanges() { return false; }

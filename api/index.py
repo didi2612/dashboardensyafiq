@@ -223,6 +223,7 @@ def load_data():
                 log(f"  Reading sheet: {sheet_name}")
                 df = pd.read_excel(filepath, sheet_name=sheet_name, header=HEADER_ROW, engine="openpyxl")
                 df = df.dropna(how="all")
+                df["_row_idx"] = HEADER_ROW + 1 + df.index
                 df = standardize_columns(df)
                 if df.empty:
                     log(f"  Empty after standardize")
@@ -266,8 +267,11 @@ def load_project_data():
         for fp in files:
             xl = pd.ExcelFile(fp, engine="openpyxl")
             if "Client Project" in xl.sheet_names:
+                fname = os.path.basename(fp)
                 df = pd.read_excel(fp, sheet_name="Client Project", header=0, engine="openpyxl")
                 df = df.dropna(how="all")
+                df["_row_idx"] = 1 + df.index
+                df["_source_file"] = fname
                 if "Client" in df.columns:
                     df["Client"] = df["Client"].ffill()
                 for c in ["Start date", "Due date", "Target Date"]:
@@ -316,7 +320,7 @@ def build_warranty_charts(df):
         tc = warranty_df["Task Type"].value_counts().reset_index()
         tc.columns = ["Task Type", "Count"]
         fig = px.bar(tc, x="Task Type", y="Count", title="Warranty Tickets by Task Type",
-                      color="Task Type", text="Bilangan")
+                      color="Task Type", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
         charts["task_type_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
@@ -324,16 +328,17 @@ def build_warranty_charts(df):
         pc = warranty_df["Project"].value_counts().reset_index()
         pc.columns = ["Project", "Count"]
         fig = px.bar(pc, x="Project", y="Count", title="Warranty Tickets by Project",
-                      color="Project", text="Bilangan")
+                      color="Project", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
         charts["project_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
     display_cols = ["Ticket No", "Task Type", "Project", "Company", "Ticket Title", "Priority", "Ticket Status", "Ticket Created Date", "Days"]
     avail = [c for c in display_cols if c in warranty_df.columns]
-    detail = warranty_df[avail].copy()
+    meta_cols = [c for c in ["_row_idx", "Source File"] if c in warranty_df.columns]
+    detail = warranty_df[avail + meta_cols].copy()
     if "Ticket Created Date" in detail.columns:
         detail["Ticket Created Date"] = detail["Ticket Created Date"].dt.strftime("%d/%m/%Y")
-    charts["detail_table"] = detail.to_html(index=False)
+    charts["detail_data"] = detail.to_dict("records")
 
     return charts
 
@@ -360,7 +365,7 @@ def build_project_charts(df):
         cc = valid_clients["Client"].value_counts().reset_index()
         cc.columns = ["Client", "Count"]
         fig = px.bar(cc, x="Client", y="Count", title="Projects by Client",
-                      color="Client", text="Bilangan")
+                      color="Client", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
         charts["client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
 
@@ -409,12 +414,13 @@ def build_project_charts(df):
 
     display_cols_p = ["Client", "Title", "Category", "Progress", "Priority", "Start date", "Due date", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
     avail_p = [c for c in display_cols_p if c in df.columns]
-    detail = df[avail_p].copy()
+    meta_p = [c for c in ["_row_idx", "_source_file"] if c in df.columns]
+    detail = df[avail_p + meta_p].copy()
     for c in ["Start date", "Due date", "Target Date"]:
         if c in detail.columns:
             detail[c] = detail[c].dt.strftime("%d/%m/%Y") if not detail[c].isna().all() else detail[c]
     detail = detail.fillna("")
-    charts["detail_table"] = detail.to_html(index=False)
+    charts["detail_data"] = detail.to_dict("records")
 
     return charts
 
@@ -523,7 +529,7 @@ def build_charts(df):
         priority_counts.columns = ["Keutamaan", "Bilangan"]
         fig = px.pie(
             priority_counts, names="Keutamaan", values="Bilangan",
-            title="Priority Distribution", color="Priority",
+            title="Priority Distribution", color="Keutamaan",
             color_discrete_map=PRIORITY_COLORS, hole=0.3,
         )
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
@@ -589,7 +595,7 @@ def build_priority_charts(df):
     priority_counts.columns = ["Keutamaan", "Bilangan"]
     fig = px.pie(
         priority_counts, names="Keutamaan", values="Bilangan",
-        title="Priority Distribution", color="Priority",
+        title="Priority Distribution", color="Keutamaan",
         color_discrete_map=PRIORITY_COLORS, hole=0.4,
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
@@ -640,7 +646,7 @@ def build_ageing_charts(df):
             fig = px.bar(
                 counts, x="Kumpulan Umur", y="Bilangan",
                 color="Kumpulan Umur", color_discrete_map=AGEING_COLORS,
-                text="Count", title=client,
+                text="Bilangan", title=client,
             )
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
             charts["ageing_clients"][client] = {
@@ -702,7 +708,7 @@ def build_client_comparison_charts(df):
 
     fig = px.bar(
         client_stats, x="Client", y="Jumlah",
-        title="Total Tickets by Client", color="Client", text="Total",
+        title="Total Tickets by Client", color="Client", text="Jumlah",
     )
     fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
     charts["client_total_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
@@ -908,7 +914,9 @@ def index():
         "Days to Close", "Ageing", "SLA Breach",
     ]
     avail_cols = [c for c in display_cols if c in df_filtered.columns]
-    detail_df = df_filtered[avail_cols].copy() if has_data and avail_cols else pd.DataFrame()
+    meta_cols = ["_row_idx", "Source File"]
+    detail_cols = avail_cols + [c for c in meta_cols if c in df_filtered.columns]
+    detail_df = df_filtered[detail_cols].copy() if has_data and detail_cols else pd.DataFrame()
 
     if "Ticket Created Date" in detail_df.columns:
         detail_df["Ticket Created Date"] = detail_df["Ticket Created Date"].dt.strftime("%d/%m/%Y")
@@ -917,10 +925,12 @@ def index():
     if "Ticket Closed Date" in detail_df.columns:
         detail_df["Ticket Closed Date"] = detail_df["Ticket Closed Date"].dt.strftime("%d/%m/%Y")
 
+    detail_data = detail_df.to_dict("records") if has_data and not detail_df.empty else []
+
     ageing_list_data = {}
     if has_data and "Ageing" in df_filtered.columns and df_filtered["Ageing"].notna().sum() > 0:
         age_order = ["1-30 Days", "31-60 Days", "> 60 Days"]
-        ageing_cols = [c for c in ["Client", "Ticket No", "Ticket Title", "Ticket Status", "Priority", "Ticket Created Date", "Days"] if c in df_filtered.columns]
+        ageing_cols = [c for c in ["Client", "Ticket No", "Ticket Title", "Ticket Status", "Priority", "Ticket Created Date", "Days", "_row_idx", "Source File"] if c in df_filtered.columns]
         ageing_df = df_filtered.dropna(subset=["Ageing"]).copy()
         if "Ticket Created Date" in ageing_df.columns:
             ageing_df["Ticket Created Date"] = ageing_df["Ticket Created Date"].dt.strftime("%d/%m/%Y")
@@ -957,10 +967,56 @@ def index():
         warranty_charts=warranty_charts,
         project_charts=project_charts,
         project_data=project_df.to_dict("records") if has_project else [],
-        detail_table=detail_df.to_html(index=False, classes="table table-striped") if has_data and not detail_df.empty else "",
+        detail_data=detail_data,
         ageing_list_data=ageing_list_data,
         now=datetime.now().strftime("%d-%m-%Y %H:%M"),
     )
+
+
+@app.route("/api/save", methods=["POST"])
+def api_save():
+    data = request.get_json()
+    source_file = data.get("source_file")
+    sheet = data.get("sheet")
+    row_idx = data.get("row_idx")
+    column = data.get("column")
+    value = data.get("value")
+
+    files = find_excel_files()
+    filepath = None
+    for f in files:
+        if os.path.basename(f) == source_file:
+            filepath = f
+            break
+    if not filepath:
+        return {"success": False, "error": f"File not found: {source_file}"}
+
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(filepath)
+        if sheet not in wb.sheetnames:
+            return {"success": False, "error": f"Sheet not found: {sheet}"}
+        ws = wb[sheet]
+
+        header_row_idx = HEADER_ROW + 1
+        col_idx = None
+        for cell in ws[header_row_idx]:
+            if cell.value:
+                cl = str(cell.value).lower().strip()
+                if cl in COLUMN_MAPPING and COLUMN_MAPPING[cl] == column:
+                    col_idx = cell.column
+                    break
+
+        if col_idx is None:
+            return {"success": False, "error": f"Column not found: {column}"}
+
+        excel_row = int(row_idx) + 1
+        ws.cell(row=excel_row, column=col_idx, value=value)
+        wb.save(filepath)
+        wb.close()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 if __name__ == "__main__":

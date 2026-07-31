@@ -5,8 +5,11 @@ script, so a CSV upload and an Excel sheet go through the exact same
 standardization before hitting the database.
 """
 import re
+import warnings
 
 import pandas as pd
+
+warnings.filterwarnings("ignore", message="Downcasting object dtype arrays")
 
 HEADER_ROW = 1
 
@@ -275,17 +278,45 @@ def parse_project_sheet(df, source_file):
         df["Client"] = df["Client"].ffill()
     df["Source File"] = source_file
 
-    # A project's Title only appears on its first row in the sheet;
-    # the sub-item/checklist rows underneath it (e.g. a "Pre UAT"
-    # breakdown split across several rows) leave Title blank, same as a
-    # merged cell. Without carrying it down, those rows all collapse to
-    # Title=NULL -- so two *different* LKTN projects (say "Claim" and
-    # "Asset") that happen to share the same boilerplate checklist text
-    # ("Sign-off - 18/06-21/06") become indistinguishable from each
-    # other. Filling forward per Client (never across a client
-    # boundary) keeps each sub-item attached to its real parent project.
+    # A project's Title, and every other block-level field (Category,
+    # Priority, dates, Assigned to, Status Progress, the overall
+    # percentages...) only appear on the row where that task starts.
+    # The sub-item/checklist rows underneath it (e.g. a "Pre UAT"
+    # breakdown split across several rows, one bullet per row) leave
+    # every column but Description blank -- same as a merged cell would.
+    # Two problems came from not carrying those down: (1) two
+    # *different* projects that happen to share identical boilerplate
+    # checklist text ("Sign-off - 18/06-21/06") both collapsed to
+    # Title=NULL and became indistinguishable from each other, and
+    # (2) those rows showed as a wall of empty cells in the UI even
+    # though they clearly belong to a specific task with a real
+    # category/priority/date range/owner.
+    #
+    # Capture which rows were originally sub-items *before* filling
+    # anything in -- a row with no Title and no Description is a pure
+    # spacer (leftover row-height padding, not real data) and needs
+    # dropping, but that distinction disappears once Title is filled.
+    was_subitem = df["Title"].isna() if "Title" in df.columns else pd.Series(False, index=df.index)
+
     if "Title" in df.columns and "Client" in df.columns:
         df["Title"] = df.groupby("Client")["Title"].ffill()
+
+    is_pure_spacer = was_subitem & (df["Description"].isna() if "Description" in df.columns else True)
+    df = df[~is_pure_spacer]
+
+    # Now that Title reflects the real parent task, fill the rest of
+    # that task's block-level columns down onto its sub-item rows too
+    # -- scoped to (Client, Title) so it can never bleed from one
+    # project into the next. ffill only ever fills a cell that's
+    # already blank, so a row with its own genuine value (e.g. every
+    # numbered task already has its own date range) is left untouched.
+    block_cols = [c for c in [
+        "Category", "Progress", "Priority", "Start date", "Due date", "Tempoh",
+        "Target Date", "Assigned to", "Status Progress", "Percentage",
+        "Overall Progress Task (%)",
+    ] if c in df.columns]
+    if block_cols and "Title" in df.columns and "Client" in df.columns:
+        df[block_cols] = df.groupby(["Client", "Title"])[block_cols].transform(lambda s: s.ffill())
 
     if "Tempoh" in df.columns:
         df["Duration"] = df["Tempoh"].astype(str)
@@ -294,14 +325,6 @@ def parse_project_sheet(df, source_file):
     for c in ["Start date", "Due date", "Target Date"]:
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
-
-    # Pure spacer/padding rows (blank row height filler between
-    # sections) survive dropna(how="all") because Client -- and now
-    # Title too -- carry a value onto them, but they contribute nothing
-    # real. Drop anything with no actual content in any of these.
-    content_cols = [c for c in ["Description", "Category", "Start date", "Due date", "Status Progress", "Percentage", "Overall Progress Task (%)"] if c in df.columns]
-    if content_cols:
-        df = df[df[content_cols].notna().any(axis=1)]
 
     # SQL's NULL is never equal to NULL, even inside a UNIQUE constraint --
     # so rows with a blank title/date (common for sub-item description

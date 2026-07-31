@@ -112,6 +112,11 @@ body::after{
   display:flex;flex-wrap:wrap;gap:14px;margin-bottom:22px;padding:18px;
   background:var(--glass);border:1px solid var(--border);border-radius:var(--radius-lg);
   align-items:end;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  /* backdrop-filter on this and every card below each creates its own
+     stacking context; without this the dropdown panel (however high its
+     own z-index) was trapped inside .controls' context and painted
+     behind .tabs/.metrics/.chart-box, which come later in the DOM. */
+  position:relative;z-index:60;
 }
 .control-group{display:flex;flex-direction:column;gap:6px}
 .control-group label{font-size:0.72rem;color:var(--text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px}
@@ -157,6 +162,32 @@ body::after{
 }
 .dropdown-option:hover{background:rgba(44,95,130,0.07)}
 .dropdown-option input{accent-color:var(--accent)}
+.dropdown-panel-head{display:none}
+.filter-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,35,0.45);z-index:10040}
+
+/* On narrow screens a corner popover is too small to use comfortably,
+   so the open dropdown becomes a fullscreen sheet with its own header
+   and an explicit close button instead of relying on outside-click. */
+@media (max-width:640px){
+  .dropdown-panel{
+    position:fixed;top:6vh;left:4vw;right:4vw;bottom:6vh;
+    width:auto;min-width:0;max-height:none;z-index:10050;
+    display:none;flex-direction:column;padding:0;overflow:hidden;
+  }
+  .filter-dropdown.open .dropdown-panel{display:flex}
+  .dropdown-panel-head{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:16px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
+  }
+  .dropdown-panel-head .title{font-family:'Sora',sans-serif;font-weight:700;font-size:0.95rem;color:var(--text)}
+  .dropdown-panel-head .done-btn{
+    padding:7px 16px;border-radius:999px;border:none;background:var(--gradient);
+    color:#fff;font-weight:700;font-size:0.8rem;cursor:pointer;
+  }
+  .dropdown-panel .options-scroll{overflow-y:auto;padding:10px}
+  .dropdown-option{padding:11px 10px;font-size:14px}
+  .filter-backdrop.show{display:block}
+}
 
 /* ---------- Tabs ---------- */
 .tabs{
@@ -436,12 +467,18 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
       <span class="dt-label">All Clients</span><span class="chev">&#9662;</span>
     </button>
     <div class="dropdown-panel">
-      {% for c in filter_options.clients %}
-      <label class="dropdown-option">
-        <input type="checkbox" name="client" value="{{ c }}" {% if c in filter_options.selected_clients %}checked{% endif %}>
-        <span>{{ c }}</span>
-      </label>
-      {% endfor %}
+      <div class="dropdown-panel-head">
+        <span class="title">Client</span>
+        <button type="button" class="done-btn" onclick="toggleFilterDropdown(this)">Done</button>
+      </div>
+      <div class="options-scroll">
+        {% for c in filter_options.clients %}
+        <label class="dropdown-option">
+          <input type="checkbox" name="client" value="{{ c }}" {% if c in filter_options.selected_clients %}checked{% endif %}>
+          <span>{{ c }}</span>
+        </label>
+        {% endfor %}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -452,12 +489,18 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
       <span class="dt-label">All Priorities</span><span class="chev">&#9662;</span>
     </button>
     <div class="dropdown-panel">
-      {% for p in filter_options.priorities %}
-      <label class="dropdown-option">
-        <input type="checkbox" name="priority" value="{{ p }}" {% if p in filter_options.selected_priorities %}checked{% endif %}>
-        <span>{{ p }}</span>
-      </label>
-      {% endfor %}
+      <div class="dropdown-panel-head">
+        <span class="title">Priority</span>
+        <button type="button" class="done-btn" onclick="toggleFilterDropdown(this)">Done</button>
+      </div>
+      <div class="options-scroll">
+        {% for p in filter_options.priorities %}
+        <label class="dropdown-option">
+          <input type="checkbox" name="priority" value="{{ p }}" {% if p in filter_options.selected_priorities %}checked{% endif %}>
+          <span>{{ p }}</span>
+        </label>
+        {% endfor %}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -468,12 +511,18 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
       <span class="dt-label">All Statuses</span><span class="chev">&#9662;</span>
     </button>
     <div class="dropdown-panel">
-      {% for s in filter_options.statuses %}
-      <label class="dropdown-option">
-        <input type="checkbox" name="status" value="{{ s }}" {% if s in filter_options.selected_statuses %}checked{% endif %}>
-        <span>{{ s }}</span>
-      </label>
-      {% endfor %}
+      <div class="dropdown-panel-head">
+        <span class="title">Status</span>
+        <button type="button" class="done-btn" onclick="toggleFilterDropdown(this)">Done</button>
+      </div>
+      <div class="options-scroll">
+        {% for s in filter_options.statuses %}
+        <label class="dropdown-option">
+          <input type="checkbox" name="status" value="{{ s }}" {% if s in filter_options.selected_statuses %}checked{% endif %}>
+          <span>{{ s }}</span>
+        </label>
+        {% endfor %}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -484,12 +533,18 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
       <span class="dt-label">All Task Types</span><span class="chev">&#9662;</span>
     </button>
     <div class="dropdown-panel">
-      {% for t in filter_options.task_types %}
-      <label class="dropdown-option">
-        <input type="checkbox" name="task_type" value="{{ t }}" {% if t in filter_options.selected_task_types %}checked{% endif %}>
-        <span>{{ t }}</span>
-      </label>
-      {% endfor %}
+      <div class="dropdown-panel-head">
+        <span class="title">Task Type</span>
+        <button type="button" class="done-btn" onclick="toggleFilterDropdown(this)">Done</button>
+      </div>
+      <div class="options-scroll">
+        {% for t in filter_options.task_types %}
+        <label class="dropdown-option">
+          <input type="checkbox" name="task_type" value="{{ t }}" {% if t in filter_options.selected_task_types %}checked{% endif %}>
+          <span>{{ t }}</span>
+        </label>
+        {% endfor %}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -501,6 +556,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
     <button type="submit" class="btn-filter">Filter</button>
   </div>
 </form>
+<div class="filter-backdrop" onclick="closeAllFilterDropdowns()"></div>
 
 {% if not has_data %}
 <div class="empty-state">
@@ -1353,11 +1409,23 @@ function refreshFilterDropdownLabel(dd) {
   dd.querySelector('.dt-label').textContent = filterDropdownLabel(dd);
 }
 
+function syncFilterBackdrop() {
+  var anyOpen = document.querySelector('.filter-dropdown.open') !== null;
+  var backdrop = document.querySelector('.filter-backdrop');
+  if (backdrop) backdrop.classList.toggle('show', anyOpen);
+}
+
+function closeAllFilterDropdowns() {
+  document.querySelectorAll('.filter-dropdown.open').forEach(function(el) { el.classList.remove('open'); });
+  syncFilterBackdrop();
+}
+
 function toggleFilterDropdown(btn) {
   var dd = btn.closest('.filter-dropdown');
   var isOpen = dd.classList.contains('open');
   document.querySelectorAll('.filter-dropdown.open').forEach(function(el) { el.classList.remove('open'); });
   if (!isOpen) dd.classList.add('open');
+  syncFilterBackdrop();
 }
 
 document.querySelectorAll('.filter-dropdown').forEach(function(dd) {
@@ -1369,7 +1437,7 @@ document.querySelectorAll('.filter-dropdown').forEach(function(dd) {
 
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.filter-dropdown')) {
-    document.querySelectorAll('.filter-dropdown.open').forEach(function(el) { el.classList.remove('open'); });
+    closeAllFilterDropdowns();
   }
 });
 </script>

@@ -4,6 +4,8 @@ Used by both the Flask app (api/index.py) and the upload endpoint / migration
 script, so a CSV upload and an Excel sheet go through the exact same
 standardization before hitting the database.
 """
+import re
+
 import pandas as pd
 
 HEADER_ROW = 1
@@ -186,14 +188,20 @@ def convert_dtypes(df):
 def parse_ticket_sheet(df, client, source_file):
     """Standardize a raw ticket sheet/CSV into the canonical ticket dataframe.
 
-    Applies the same "Ticket No must start with T/" filter the original
-    file-scanning loader used, so uploads behave identically to the old
-    bundled-Excel flow.
+    Returns (parsed_df, info) where info reports what got left behind, so
+    callers can surface it instead of rows/columns silently vanishing:
+      - rows_dropped: rows with no Ticket No at all (blank separator/
+        subtotal rows that survive the initial dropna(how="all") because
+        some other cell in the row is filled in).
+      - unmapped_columns: source columns that didn't match anything in
+        COLUMN_MAPPING and aren't part of the fixed ticket schema, so
+        their data isn't stored (e.g. a "Remarks" or "Assigned To" column
+        the spreadsheet has that this dashboard has no field for).
     """
     df = df.dropna(how="all")
     df = standardize_columns(df)
     if df.empty:
-        return df
+        return df, {"rows_dropped": 0, "unmapped_columns": []}
 
     if "Client" not in df.columns or df["Client"].isna().all():
         df["Client"] = client
@@ -203,18 +211,23 @@ def parse_ticket_sheet(df, client, source_file):
 
     df = convert_dtypes(df)
 
+    unmapped_columns = [c for c in df.columns if c not in TICKET_COLUMNS]
+
+    rows_dropped = 0
     if "Ticket No" in df.columns:
         tn = df["Ticket No"]
         if isinstance(tn, pd.DataFrame):
             tn = tn.iloc[:, 0]
-        mask = tn.astype(str).str.match(r"^T/", na=False)
-        df = df[mask]
+        tn = tn.astype(str).str.strip()
+        valid = tn.ne("") & tn.str.lower().ne("nan") & tn.str.lower().ne("none")
+        rows_dropped = int((~valid).sum())
+        df = df[valid]
 
     for col in TICKET_COLUMNS:
         if col not in df.columns:
             df[col] = None
 
-    return df[TICKET_COLUMNS]
+    return df[TICKET_COLUMNS], {"rows_dropped": rows_dropped, "unmapped_columns": unmapped_columns}
 
 
 def parse_project_sheet(df, source_file):
@@ -239,14 +252,34 @@ def parse_project_sheet(df, source_file):
 
 
 def detect_ticket_sheets(filepath_or_buffer):
-    """Return sheet names in an xlsx that look like ticket sheets."""
+    """Return {sheet_name: header_row} for sheets that look like ticket sheets.
+
+    Tries HEADER_ROW first (row 1, matching the original bundled workbook's
+    layout) then falls back to rows 0 and 2, since a sheet exported from a
+    different tool can put the real header one row up or down -- previously
+    a sheet like that wasn't recognized as a ticket sheet at all and its
+    entire client's worth of tickets went missing from the upload with no
+    indication why.
+    """
     xl = pd.ExcelFile(filepath_or_buffer, engine="openpyxl")
-    ticket_sheets = []
+    ticket_sheets = {}
     for name in xl.sheet_names:
-        try:
-            df_head = pd.read_excel(filepath_or_buffer, sheet_name=name, header=HEADER_ROW, engine="openpyxl", nrows=3)
-            if "Ticket No" in df_head.columns or "ticket no" in str(df_head.columns).lower():
-                ticket_sheets.append(name)
-        except Exception:
-            pass
+        for header_row in (HEADER_ROW, 0, 2):
+            try:
+                df_head = pd.read_excel(filepath_or_buffer, sheet_name=name, header=header_row, engine="openpyxl", nrows=3)
+            except Exception:
+                continue
+            # pandas dedupes repeated header names as "Ticket No.1",
+            # "Ticket No.2", ... -- strip that suffix before checking so a
+            # printed/aggregate report with the same block of columns
+            # repeated side by side several times is actually recognized
+            # as repeated, not read as a single "Ticket No" column.
+            base_names = [re.sub(r"\.\d+$", "", c) for c in (str(c).lower().strip() for c in df_head.columns)]
+            ticket_no_matches = sum(1 for c in base_names if COLUMN_MAPPING.get(c) == "Ticket No")
+            # More than one match means a repeated-block layout, which
+            # isn't a one-row-per-ticket sheet and would wrongly become a
+            # "client" named after the sheet -- skip it.
+            if ticket_no_matches == 1:
+                ticket_sheets[name] = header_row
+                break
     return ticket_sheets

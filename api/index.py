@@ -789,7 +789,16 @@ def api_upload():
     form_client = request.form.get("client", "").strip()
 
     summary = {"files": [], "tickets_inserted": 0, "tickets_updated": 0,
-               "projects_inserted": 0, "projects_updated": 0, "errors": []}
+               "projects_inserted": 0, "projects_updated": 0, "errors": [],
+               "rows_dropped": 0, "unmapped_columns": []}
+    seen_unmapped = set()
+
+    def note_diagnostics(diag):
+        summary["rows_dropped"] += diag["rows_dropped"]
+        for col in diag["unmapped_columns"]:
+            if col not in seen_unmapped:
+                seen_unmapped.add(col)
+                summary["unmapped_columns"].append(col)
 
     for f in files:
         fname = f.filename
@@ -799,7 +808,8 @@ def api_upload():
             if ext == ".csv":
                 df = pd.read_csv(io.BytesIO(raw))
                 client = form_client or (df["Client"].iloc[0] if "Client" in df.columns and len(df) else os.path.splitext(fname)[0])
-                parsed = parse_ticket_sheet(df, client=client, source_file=fname)
+                parsed, diag = parse_ticket_sheet(df, client=client, source_file=fname)
+                note_diagnostics(diag)
                 ins, upd = db.upsert_tickets(parsed, conn=request_conn())
                 summary["tickets_inserted"] += ins
                 summary["tickets_updated"] += upd
@@ -809,16 +819,22 @@ def api_upload():
                 buf = io.BytesIO(raw)
                 sheets = detect_ticket_sheets(buf)
                 rows_found = 0
-                for sheet_name in sheets:
+                for sheet_name, header_row in sheets.items():
                     buf.seek(0)
-                    df = pd.read_excel(buf, sheet_name=sheet_name, header=1, engine="openpyxl")
-                    parsed = parse_ticket_sheet(df, client=sheet_name, source_file=fname)
+                    df = pd.read_excel(buf, sheet_name=sheet_name, header=header_row, engine="openpyxl")
+                    parsed, diag = parse_ticket_sheet(df, client=sheet_name, source_file=fname)
+                    note_diagnostics(diag)
                     if parsed.empty:
                         continue
                     ins, upd = db.upsert_tickets(parsed, conn=request_conn())
                     summary["tickets_inserted"] += ins
                     summary["tickets_updated"] += upd
                     rows_found += len(parsed)
+
+                if not sheets:
+                    summary["errors"].append(
+                        f"{fname}: no sheet had a recognizable 'Ticket No' column (checked header rows 1, 0 and 2)"
+                    )
 
                 buf.seek(0)
                 xl = pd.ExcelFile(buf, engine="openpyxl")

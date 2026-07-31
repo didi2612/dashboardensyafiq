@@ -47,16 +47,22 @@ def main():
     print(f"Ticket sheets found: {sheets}")
 
     total_ins = total_upd = 0
-    for sheet_name in sheets:
-        df = pd.read_excel(filepath, sheet_name=sheet_name, header=1, engine="openpyxl")
-        parsed = parse_ticket_sheet(df, client=sheet_name, source_file=fname)
+    all_unmapped = set()
+    for sheet_name, header_row in sheets.items():
+        df = pd.read_excel(filepath, sheet_name=sheet_name, header=header_row, engine="openpyxl")
+        parsed, diag = parse_ticket_sheet(df, client=sheet_name, source_file=fname)
+        all_unmapped.update(diag["unmapped_columns"])
         if parsed.empty:
             print(f"  {sheet_name}: 0 rows, skipping")
             continue
         ins, upd = db.upsert_tickets(parsed)
         total_ins += ins
         total_upd += upd
-        print(f"  {sheet_name}: {len(parsed)} rows -> {ins} inserted, {upd} updated")
+        dropped_note = f", {diag['rows_dropped']} row(s) skipped (no Ticket No)" if diag["rows_dropped"] else ""
+        print(f"  {sheet_name}: {len(parsed)} rows -> {ins} inserted, {upd} updated{dropped_note}")
+
+    if all_unmapped:
+        print(f"\nColumns present in the workbook but not stored (no field for them): {sorted(all_unmapped)}")
 
     xl = pd.ExcelFile(filepath, engine="openpyxl")
     if "Client Project" in xl.sheet_names:

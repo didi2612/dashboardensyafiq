@@ -583,6 +583,10 @@ def build_sla_charts(df):
     if "SLA Breach" not in df.columns:
         return charts
 
+    exclude_clients = ["Client Warranty", "KUIPS"]
+    if "Client" in df.columns:
+        df = df[~df["Client"].isin(exclude_clients)].copy()
+
     total = len(df)
     breaches = df["SLA Breach"].sum()
     compliance_rate = round((total - breaches) / total * 100, 1) if total > 0 else 0
@@ -621,9 +625,28 @@ def build_sla_charts(df):
         charts["sla_client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
         if "Ticket Status" in df.columns:
-            sla_pivot = df.groupby(["Client", "Ticket Status"])["SLA Breach"].agg(["sum", "count", "mean"]).reset_index()
+            status_map = {
+                "Completed": "Closed + Completed",
+                "Closed": "Closed + Completed",
+                "Pending": "Pending + In Progress",
+                "In Progress": "Pending + In Progress",
+            }
+            status_group = df["Ticket Status"].replace(status_map)
+            sla_pivot = df.groupby(["Client", status_group])["SLA Breach"].agg(["sum", "count", "mean"]).reset_index()
             sla_pivot.columns = ["Client", "Status", "Pelanggaran", "Jumlah", "Kadar Pelanggaran"]
             sla_pivot["Kadar Pelanggaran"] = (sla_pivot["Kadar Pelanggaran"] * 100).round(1)
+
+            if "SLA Late" in df.columns and "Ageing" in df.columns:
+                sla_valid = pd.to_numeric(df["SLA Late"].astype(str).str.strip().replace({"nan": ""}), errors="coerce").notna()
+                age_valid = df["Ageing"].astype(str).str.strip()
+                age_valid = age_valid.ne("") & age_valid.str.lower().ne("nan") & age_valid.ne("Not Due")
+
+                open_counts = df[df["Ticket Status"].isin(["Pending", "In Progress"]) & sla_valid & age_valid].groupby("Client").size()
+                sla_pivot["Open (SLA+Ageing)"] = sla_pivot.apply(
+                    lambda r: int(open_counts.get(r["Client"], 0)) if r["Status"] == "Pending + In Progress" else "",
+                    axis=1,
+                )
+
             charts["sla_pivot"] = sla_pivot.to_html(index=False)
 
     return charts

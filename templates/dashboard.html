@@ -1013,9 +1013,44 @@ document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
 /* ---------- Refresh (also brings the splash screen back) ---------- */
 function refreshWithSplash() {
-  try { sessionStorage.removeItem('swSplashShown'); } catch (e) {}
+  try {
+    sessionStorage.removeItem('swSplashShown');
+    if (isFullscreen()) {
+      sessionStorage.setItem('swWasFullscreen', '1');
+    } else {
+      sessionStorage.removeItem('swWasFullscreen');
+    }
+  } catch (e) {}
   window.location.reload();
 }
+
+// Reloading a page always drops fullscreen (browsers do this
+// unconditionally), so if the tab was fullscreen right before a
+// refresh-triggered reload, try to re-enter it once the new page has
+// loaded. Browsers require a user gesture to grant fullscreen, and a
+// reload doesn't carry that gesture over, so this can silently fail --
+// in that case we just prompt for one more tap instead of pretending it
+// worked.
+(function() {
+  var wantFullscreen = false;
+  try { wantFullscreen = sessionStorage.getItem('swWasFullscreen') === '1'; } catch (e) {}
+  if (!wantFullscreen) return;
+  try { sessionStorage.removeItem('swWasFullscreen'); } catch (e) {}
+
+  window.addEventListener('load', function() {
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
+    var result = req && req.call(el);
+    var notifyIfStillWindowed = function() {
+      if (!isFullscreen()) showToast('Tap Fullscreen to continue in fullscreen', 'error');
+    };
+    if (result && result.then) {
+      result.catch(notifyIfStillWindowed);
+    } else {
+      setTimeout(notifyIfStillWindowed, 300);
+    }
+  });
+})();
 
 function switchTab(idx) {
   document.querySelectorAll('.tab-btn').forEach(function(b, i) {

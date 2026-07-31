@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Software Wizard (M) Sdn Bhd : Client Issues Dashboard</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2c5f82">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SW Dashboard">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -434,6 +442,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
     <div class="topbar-meta"><span class="dot"></span>Last synced {{ now }}</div>
     <button type="button" class="btn-pill primary" onclick="openUploadModal()">&#8593; Upload Data</button>
     <button type="button" class="btn-pill danger" onclick="openRestartModal()">&#8635; Reset Database</button>
+    <button type="button" class="btn-pill" id="installAppBtn" onclick="installApp()" style="display:none">&#8615; Install App</button>
   </div>
 </div>
 
@@ -935,6 +944,37 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 </div>
 
 <script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function(e) {
+      console.warn('Service worker registration failed', e);
+    });
+  });
+}
+
+var deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  var btn = document.getElementById('installAppBtn');
+  if (btn) btn.style.display = 'inline-flex';
+});
+
+function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.finally(function() {
+    deferredInstallPrompt = null;
+    var btn = document.getElementById('installAppBtn');
+    if (btn) btn.style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', function() {
+  var btn = document.getElementById('installAppBtn');
+  if (btn) btn.style.display = 'none';
+});
+
 function switchTab(idx) {
   document.querySelectorAll('.tab-btn').forEach(function(b, i) {
     b.classList.toggle('active', i === idx);

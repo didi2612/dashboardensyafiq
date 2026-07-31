@@ -28,6 +28,7 @@ from data_utils import (
 app = Flask(
     __name__,
     template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates"),
+    static_folder=None,  # we serve /static/<file> ourselves below, from the project root
 )
 
 MAX_UPLOAD_MB = 25
@@ -39,6 +40,23 @@ PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 @app.route("/sw.svg")
 def brand_watermark():
     return send_from_directory(PROJECT_ROOT, "sw.svg", mimetype="image/svg+xml")
+
+
+@app.route("/manifest.json")
+def pwa_manifest():
+    return send_from_directory(PROJECT_ROOT, "manifest.json", mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def pwa_service_worker():
+    # Served from the root path (not /static/sw.js) so its default scope
+    # covers the whole origin instead of just /static/.
+    return send_from_directory(PROJECT_ROOT, "sw.js", mimetype="application/javascript")
+
+
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory(os.path.join(PROJECT_ROOT, "static"), filename)
 
 
 def log(msg, level="INFO"):

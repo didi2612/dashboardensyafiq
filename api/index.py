@@ -3,6 +3,12 @@ import os
 import sys
 from datetime import datetime
 
+# Vercel's Python runtime imports this file directly via importlib without
+# adding its own directory to sys.path, so sibling modules (db.py,
+# data_utils.py) can't be found by a bare `import db` unless we add it
+# ourselves first.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go

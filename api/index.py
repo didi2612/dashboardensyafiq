@@ -264,7 +264,7 @@ def build_project_charts(df):
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'
             charts["timeline_chart"] = timeline_charts_html
 
-    display_cols_p = ["Client", "Title", "Description", "Category", "Progress", "Priority", "Start date", "Due date", "Duration", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
+    display_cols_p = ["Client", "Title", "Description", "Category", "Progress", "Priority", "Start date", "Due date", "Target Date", "Duration", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
     avail_p = [c for c in display_cols_p if c in df.columns]
     meta_p = [c for c in ["_row_idx", "_source_file"] if c in df.columns]
     detail = df[avail_p + meta_p].copy()

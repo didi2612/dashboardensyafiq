@@ -4,7 +4,12 @@ Used by both the Flask app (api/index.py) and the upload endpoint / migration
 script, so a CSV upload and an Excel sheet go through the exact same
 standardization before hitting the database.
 """
+import re
+import warnings
+
 import pandas as pd
+
+warnings.filterwarnings("ignore", message="Downcasting object dtype arrays")
 
 HEADER_ROW = 1
 
@@ -78,9 +83,10 @@ TICKET_COLUMNS = [
 ]
 
 PROJECT_COLUMNS = [
-    "Client", "Title", "Category", "Progress", "Priority", "Start date",
-    "Due date", "Target Date", "Assigned to", "Status Progress",
-    "Percentage", "Overall Progress Task (%)", "Source File",
+    "Client", "Title", "Description", "Category", "Progress", "Priority",
+    "Start date", "Due date", "Target Date", "Duration", "Assigned to",
+    "Status Progress", "Percentage", "Overall Progress Task (%)", "Source File",
+    "Dedup Seq",
 ]
 
 
@@ -186,14 +192,20 @@ def convert_dtypes(df):
 def parse_ticket_sheet(df, client, source_file):
     """Standardize a raw ticket sheet/CSV into the canonical ticket dataframe.
 
-    Applies the same "Ticket No must start with T/" filter the original
-    file-scanning loader used, so uploads behave identically to the old
-    bundled-Excel flow.
+    Returns (parsed_df, info) where info reports what got left behind, so
+    callers can surface it instead of rows/columns silently vanishing:
+      - rows_dropped: rows with no Ticket No at all (blank separator/
+        subtotal rows that survive the initial dropna(how="all") because
+        some other cell in the row is filled in).
+      - unmapped_columns: source columns that didn't match anything in
+        COLUMN_MAPPING and aren't part of the fixed ticket schema, so
+        their data isn't stored (e.g. a "Remarks" or "Assigned To" column
+        the spreadsheet has that this dashboard has no field for).
     """
     df = df.dropna(how="all")
     df = standardize_columns(df)
     if df.empty:
-        return df
+        return df, {"rows_dropped": 0, "unmapped_columns": []}
 
     if "Client" not in df.columns or df["Client"].isna().all():
         df["Client"] = client
@@ -203,50 +215,174 @@ def parse_ticket_sheet(df, client, source_file):
 
     df = convert_dtypes(df)
 
+    unmapped_columns = [c for c in df.columns if c not in TICKET_COLUMNS]
+
     if "Ticket No" in df.columns:
         tn = df["Ticket No"]
         if isinstance(tn, pd.DataFrame):
             tn = tn.iloc[:, 0]
-        mask = tn.astype(str).str.match(r"^T/", na=False)
-        df = df[mask]
+    else:
+        tn = pd.Series([None] * len(df), index=df.index)
+
+    # tn.notna() catches every pandas null sentinel (None, NaN, NaT,
+    # pandas.NA) regardless of the column's inferred dtype; the string
+    # checks additionally catch a cell that's literally the text "nan"/
+    # "none". Relying on the string form alone previously let a
+    # not-actually-empty-looking NA slip through on at least one real
+    # upload.
+    tn_str = tn.astype(str).str.strip()
+    valid = tn.notna() & tn_str.ne("") & tn_str.str.lower().ne("nan") & tn_str.str.lower().ne("none")
+    rows_dropped = int((~valid).sum())
+    df = df[valid]
 
     for col in TICKET_COLUMNS:
         if col not in df.columns:
             df[col] = None
 
-    return df[TICKET_COLUMNS]
+    parsed = df[TICKET_COLUMNS]
+
+    # Belt-and-suspenders: tickets.ticket_no is NOT NULL in Postgres, and
+    # a single row violating that fails the *entire* batch insert -- not
+    # just that row -- silently taking every other valid row in the file
+    # down with it. Guarantee nothing null reaches the database no
+    # matter what slipped past the check above.
+    still_null = parsed["Ticket No"].isna()
+    if still_null.any():
+        rows_dropped += int(still_null.sum())
+        parsed = parsed[~still_null]
+
+    return parsed, {"rows_dropped": rows_dropped, "unmapped_columns": unmapped_columns}
+
+
+def _scale_percentage(series):
+    """Excel's native percentage format stores 50% as the float 0.5, not
+    50 -- there's no "%" character to strip, so pd.to_numeric alone leaves
+    it as a 0-1 fraction. Scale fractional values up to the 0-100 range
+    the UI expects; leave anything already >1 (e.g. entered as "80")
+    alone.
+    """
+    numeric = pd.to_numeric(series.astype(str).str.replace("%", ""), errors="coerce")
+    return numeric.apply(lambda v: v * 100 if pd.notna(v) and v <= 1 else v)
 
 
 def parse_project_sheet(df, source_file):
+    """Standardize a raw 'Client Project' sheet.
+
+    Returns (parsed_df, info); info["unmapped_columns"] lists source
+    columns with no matching field (dropped silently before), so a
+    column like a spreadsheet's own "Notes" shows up instead of just
+    disappearing.
+    """
     df = df.dropna(how="all").copy()
     if "Client" in df.columns:
         df["Client"] = df["Client"].ffill()
     df["Source File"] = source_file
 
+    # A project's Title, and every other block-level field (Category,
+    # Priority, dates, Assigned to, Status Progress, the overall
+    # percentages...) only appear on the row where that task starts.
+    # The sub-item/checklist rows underneath it (e.g. a "Pre UAT"
+    # breakdown split across several rows, one bullet per row) leave
+    # every column but Description blank -- same as a merged cell would.
+    # Two problems came from not carrying those down: (1) two
+    # *different* projects that happen to share identical boilerplate
+    # checklist text ("Sign-off - 18/06-21/06") both collapsed to
+    # Title=NULL and became indistinguishable from each other, and
+    # (2) those rows showed as a wall of empty cells in the UI even
+    # though they clearly belong to a specific task with a real
+    # category/priority/date range/owner.
+    #
+    # Capture which rows were originally sub-items *before* filling
+    # anything in -- a row with no Title and no Description is a pure
+    # spacer (leftover row-height padding, not real data) and needs
+    # dropping, but that distinction disappears once Title is filled.
+    was_subitem = df["Title"].isna() if "Title" in df.columns else pd.Series(False, index=df.index)
+
+    if "Title" in df.columns and "Client" in df.columns:
+        df["Title"] = df.groupby("Client")["Title"].ffill()
+
+    is_pure_spacer = was_subitem & (df["Description"].isna() if "Description" in df.columns else True)
+    df = df[~is_pure_spacer]
+
+    # Now that Title reflects the real parent task, fill the rest of
+    # that task's block-level columns down onto its sub-item rows too
+    # -- scoped to (Client, Title) so it can never bleed from one
+    # project into the next. ffill only ever fills a cell that's
+    # already blank, so a row with its own genuine value (e.g. every
+    # numbered task already has its own date range) is left untouched.
+    block_cols = [c for c in [
+        "Category", "Progress", "Priority", "Start date", "Due date", "Tempoh",
+        "Target Date", "Assigned to", "Status Progress", "Percentage",
+        "Overall Progress Task (%)",
+    ] if c in df.columns]
+    if block_cols and "Title" in df.columns and "Client" in df.columns:
+        df[block_cols] = df.groupby(["Client", "Title"])[block_cols].transform(lambda s: s.ffill())
+
+    if "Tempoh" in df.columns:
+        df["Duration"] = df["Tempoh"].astype(str)
+        df.loc[df["Tempoh"].isna(), "Duration"] = None
+
     for c in ["Start date", "Due date", "Target Date"]:
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
+
+    # SQL's NULL is never equal to NULL, even inside a UNIQUE constraint --
+    # so rows with a blank title/date (common for sub-item description
+    # lines, e.g. a checklist under a numbered task) never match an
+    # existing row on re-upload no matter how many content columns are
+    # in the key, and just keep multiplying. A per-sheet occurrence
+    # counter (never NULL) fixes that: as long as the sheet's row order
+    # is unchanged between uploads, the same row gets the same sequence
+    # number and updates in place instead of inserting a duplicate.
+    key_basis = df[["Title", "Start date", "Due date", "Description"]] if "Description" in df.columns else df[["Title", "Start date", "Due date"]]
+    df["Dedup Seq"] = key_basis.astype(str).groupby(list(key_basis.columns)).cumcount()
+
     if "Percentage" in df.columns:
-        df["Percentage"] = pd.to_numeric(df["Percentage"].astype(str).str.replace("%", ""), errors="coerce")
+        df["Percentage"] = _scale_percentage(df["Percentage"])
     if "Overall Progress Task (%)" in df.columns:
-        df["Overall Progress Task (%)"] = pd.to_numeric(df["Overall Progress Task (%)"].astype(str).str.replace("%", ""), errors="coerce")
+        df["Overall Progress Task (%)"] = _scale_percentage(df["Overall Progress Task (%)"])
+
+    unmapped_columns = [
+        c for c in df.columns
+        if c not in PROJECT_COLUMNS and c != "Tempoh" and not str(c).startswith("Unnamed")
+    ]
 
     for col in PROJECT_COLUMNS:
         if col not in df.columns:
             df[col] = None
 
-    return df[PROJECT_COLUMNS]
+    return df[PROJECT_COLUMNS], {"unmapped_columns": unmapped_columns}
 
 
 def detect_ticket_sheets(filepath_or_buffer):
-    """Return sheet names in an xlsx that look like ticket sheets."""
+    """Return {sheet_name: header_row} for sheets that look like ticket sheets.
+
+    Tries HEADER_ROW first (row 1, matching the original bundled workbook's
+    layout) then falls back to rows 0 and 2, since a sheet exported from a
+    different tool can put the real header one row up or down -- previously
+    a sheet like that wasn't recognized as a ticket sheet at all and its
+    entire client's worth of tickets went missing from the upload with no
+    indication why.
+    """
     xl = pd.ExcelFile(filepath_or_buffer, engine="openpyxl")
-    ticket_sheets = []
+    ticket_sheets = {}
     for name in xl.sheet_names:
-        try:
-            df_head = pd.read_excel(filepath_or_buffer, sheet_name=name, header=HEADER_ROW, engine="openpyxl", nrows=3)
-            if "Ticket No" in df_head.columns or "ticket no" in str(df_head.columns).lower():
-                ticket_sheets.append(name)
-        except Exception:
-            pass
+        for header_row in (HEADER_ROW, 0, 2):
+            try:
+                df_head = pd.read_excel(filepath_or_buffer, sheet_name=name, header=header_row, engine="openpyxl", nrows=3)
+            except Exception:
+                continue
+            # pandas dedupes repeated header names as "Ticket No.1",
+            # "Ticket No.2", ... -- strip that suffix before checking so a
+            # printed/aggregate report with the same block of columns
+            # repeated side by side several times is actually recognized
+            # as repeated, not read as a single "Ticket No" column.
+            base_names = [re.sub(r"\.\d+$", "", c) for c in (str(c).lower().strip() for c in df_head.columns)]
+            ticket_no_matches = sum(1 for c in base_names if COLUMN_MAPPING.get(c) == "Ticket No")
+            # More than one match means a repeated-block layout, which
+            # isn't a one-row-per-ticket sheet and would wrongly become a
+            # "client" named after the sheet -- skip it.
+            if ticket_no_matches == 1:
+                ticket_sheets[name] = header_row
+                break
     return ticket_sheets

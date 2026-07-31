@@ -363,6 +363,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 .upload-result{margin-top:16px;font-size:0.8rem;line-height:1.6}
 .upload-result .row-ok{color:var(--success)}
 .upload-result .row-err{color:var(--danger)}
+.upload-result .row-warn{color:var(--warning)}
 .confirm-input{
   width:100%;margin-top:14px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
   background:rgba(255,255,255,0.8);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;letter-spacing:1px;
@@ -1490,6 +1491,12 @@ function doUpload() {
           html += ' &middot; ' + result.projects_inserted + ' new project row(s), ' + result.projects_updated + ' updated';
         }
         html += '</div>';
+      }
+      if (result.rows_dropped) {
+        html += '<div class="row-warn">&#9888; ' + result.rows_dropped + ' row(s) skipped (blank or no Ticket No)</div>';
+      }
+      if (result.unmapped_columns && result.unmapped_columns.length) {
+        html += '<div class="row-warn">&#9888; Column(s) not stored (no matching field): ' + escapeHtml(result.unmapped_columns.join(', ')) + '</div>';
       }
       if (result.errors && result.errors.length) {
         result.errors.forEach(function(err) { html += '<div class="row-err">&#10007; ' + escapeHtml(err) + '</div>'; });

@@ -1,292 +1,143 @@
+import io
+import os
+import sys
+from datetime import datetime
+
+# Vercel's Python runtime imports this file directly via importlib without
+# adding its own directory to sys.path, so sibling modules (db.py,
+# data_utils.py) can't be found by a bare `import db` unless we add it
+# ourselves first.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import plotly.io as pio
-import os, sys, glob, json
-from datetime import datetime, timedelta
-from flask import Flask, render_template, request
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, jsonify, send_from_directory, g
+
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env.local"), override=True)
+
+import db
+from data_utils import (
+    COLORS, PRIORITY_COLORS, AGEING_COLORS,
+    parse_ticket_sheet, parse_project_sheet, detect_ticket_sheets,
+)
 
 app = Flask(
     __name__,
     template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates"),
+    static_folder=None,  # we serve /static/<file> ourselves below, from the project root
 )
+
+MAX_UPLOAD_MB = 25
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+
+PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+
+@app.route("/sw.svg")
+def brand_watermark():
+    return send_from_directory(PROJECT_ROOT, "sw.svg", mimetype="image/svg+xml")
+
+
+@app.route("/manifest.json")
+def pwa_manifest():
+    return send_from_directory(PROJECT_ROOT, "manifest.json", mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def pwa_service_worker():
+    # Served from the root path (not /static/sw.js) so its default scope
+    # covers the whole origin instead of just /static/.
+    return send_from_directory(PROJECT_ROOT, "sw.js", mimetype="application/javascript")
+
+
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory(os.path.join(PROJECT_ROOT, "static"), filename)
+
 
 def log(msg, level="INFO"):
     print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {level} {msg}", flush=True)
 
+
 log("=" * 50)
-log(f"Dashboard starting (Flask)")
+log("Dashboard starting (Flask + Neon Postgres)")
 log(f"Python: {sys.version}")
-log(f"CWD: {os.getcwd()}")
 
-pio.templates.default = "plotly_dark"
+pio.templates.default = "plotly_white"
 
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
-HEADER_ROW = 1
+TICKET_DB_COL_BY_DISPLAY = {display: col for display, col in db.TICKET_DB_COLUMNS}
 
-COLORS = {
-    "Completed": "#34d399",
-    "Closed": "#60a5fa",
-    "Pending": "#fbbf24",
-    "InProgress": "#f87171",
-    "Inprogress": "#f87171",
-    "Open": "#a78bfa",
-    "Cancelled": "#94a3b8",
-    "On Hold": "#22d3ee",
-}
-PRIORITY_COLORS = {"High": "#f87171", "Medium": "#60a5fa", "Low": "#34d399"}
-AGEING_COLORS = {"1-30 Days": "#34d399", "31-60 Days": "#fbbf24", "> 60 Days": "#f87171"}
-
-COLUMN_MAPPING = {
-    "ticket no": "Ticket No",
-    "ticket number": "Ticket No",
-    "ticket_no": "Ticket No",
-    "ticket id": "Ticket No",
-    "task type": "Task Type",
-    "task_type": "Task Type",
-    "project": "Project",
-    "company": "Company",
-    "ticket title": "Ticket Title",
-    "ticket_title": "Ticket Title",
-    "ticket detail": "Ticket Detail",
-    "ticket_detail": "Ticket Detail",
-    "ticket desc": "Ticket Detail",
-    "detail": "Ticket Detail",
-    "description": "Ticket Detail",
-    "ticket category": "Ticket Category",
-    "ticket_category": "Ticket Category",
-    "category": "Ticket Category",
-    "priority": "Priority",
-    "ticket created date": "Ticket Created Date",
-    "ticket_created_date": "Ticket Created Date",
-    "created date": "Ticket Created Date",
-    "created": "Ticket Created Date",
-    "date created": "Ticket Created Date",
-    "ticket completed date": "Ticket Completed Date",
-    "ticket_completed_date": "Ticket Completed Date",
-    "completed date": "Ticket Completed Date",
-    "completed": "Ticket Completed Date",
-    "ticket closed date": "Ticket Closed Date",
-    "ticket_closed_date": "Ticket Closed Date",
-    "closed date": "Ticket Closed Date",
-    "closed": "Ticket Closed Date",
-    "ticket status": "Ticket Status",
-    "ticket_status": "Ticket Status",
-    "status": "Ticket Status",
-    "sla dateline": "SLA Dateline",
-    "sla_deadline": "SLA Dateline",
-    "sla": "SLA Dateline",
-    "sla late": "SLA Late",
-    "sla_breach": "SLA Late",
-    "days": "Days",
-    "ageing": "Ageing",
-    "aging": "Ageing",
-}
+_schema_ready = False
 
 
-def find_excel_files():
-    files = glob.glob(os.path.join(DATA_DIR, "*.xlsx"))
-    files = [f for f in files if not os.path.basename(f).startswith("~")]
-    files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
-    return files
+def request_conn():
+    """One psycopg2 connection per Flask request, reused by every db.*
+    call in that request instead of each opening its own. A fresh Neon
+    connect costs real round-trip time, and a single page load needs
+    4+ separate queries, so this is what actually made pages fast --
+    the indexes only help once the connection overhead isn't dominating.
+    """
+    if "db_conn" not in g:
+        g.db_conn = db.get_conn()
+    return g.db_conn
 
 
-def detect_ticket_sheets(filepath):
+@app.teardown_appcontext
+def close_request_conn(exception):
+    conn = g.pop("db_conn", None)
+    if conn is None:
+        return
     try:
-        xl = pd.ExcelFile(filepath, engine="openpyxl")
-        ticket_sheets = []
-        for name in xl.sheet_names:
+        if exception is None:
+            conn.commit()
+        else:
+            conn.rollback()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def ensure_schema():
+    global _schema_ready
+    if _schema_ready:
+        return
+    db.init_schema(conn=request_conn())
+    _schema_ready = True
+
+
+def parse_filters(args):
+    filters = {
+        "clients": args.getlist("client"),
+        "priorities": args.getlist("priority"),
+        "statuses": args.getlist("status"),
+        "task_types": args.getlist("task_type"),
+        "search": args.get("search") or None,
+    }
+    for key, param in (("date_start", "date_start"), ("date_end", "date_end")):
+        raw = args.get(param)
+        if raw:
             try:
-                df_head = pd.read_excel(filepath, sheet_name=name, header=HEADER_ROW, engine="openpyxl", nrows=3)
-                if "Ticket No" in df_head.columns or "ticket no" in str(df_head.columns).lower():
-                    ticket_sheets.append(name)
-            except Exception:
+                datetime.strptime(raw, "%Y-%m-%d")
+                filters[key] = raw
+            except ValueError:
                 pass
-        return ticket_sheets
-    except Exception as e:
-        log(f"  Cannot open {filepath}: {e}", "ERROR")
-        return []
+    return filters
 
 
-def standardize_columns(df):
-    col_map = {}
-    for col in df.columns:
-        cl = str(col).lower().strip()
-        if cl in COLUMN_MAPPING:
-            col_map[col] = COLUMN_MAPPING[cl]
-    df = df.rename(columns=col_map)
-    df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
-    df = df.loc[:, ~df.columns.duplicated()]
-    return df
-
-
-def convert_dtypes(df):
-    for date_col in ["Ticket Created Date", "Ticket Completed Date", "Ticket Closed Date", "SLA Dateline"]:
-        if date_col in df.columns:
-            df[date_col] = pd.to_datetime(df[date_col], errors="coerce", dayfirst=True)
-
-    if "Ticket Status" in df.columns:
-        ts = df["Ticket Status"]
-        if isinstance(ts, pd.DataFrame):
-            ts = ts.iloc[:, 0]
-        df["Ticket Status"] = ts.astype(str).str.strip()
-        df["Ticket Status"] = df["Ticket Status"].replace({
-            "InProgress": "In Progress",
-            "Inprogress": "In Progress",
-            "nan": None,
-        })
-
-    if "Priority" in df.columns:
-        pr = df["Priority"]
-        if isinstance(pr, pd.DataFrame):
-            pr = pr.iloc[:, 0]
-        df["Priority"] = pr.astype(str).str.strip().str.title()
-        df["Priority"] = df["Priority"].replace({"Nan": None, "None": None})
-
-    if "Ticket Created Date" in df.columns and "Ticket Closed Date" in df.columns:
-        mask = df["Ticket Created Date"].notna() & df["Ticket Closed Date"].notna()
-        df.loc[mask, "Days to Close"] = (df.loc[mask, "Ticket Closed Date"] - df.loc[mask, "Ticket Created Date"]).dt.days
-    elif "Ticket Created Date" in df.columns and "Ticket Completed Date" in df.columns:
-        mask = df["Ticket Created Date"].notna() & df["Ticket Completed Date"].notna()
-        df.loc[mask, "Days to Close"] = (df.loc[mask, "Ticket Completed Date"] - df.loc[mask, "Ticket Created Date"]).dt.days
-
-    if "Days" in df.columns:
-        df["Days"] = pd.to_numeric(df["Days"], errors="coerce")
-
-    if "Ageing" in df.columns:
-        df["Ageing"] = df["Ageing"].astype(str).str.strip().replace({
-            "1-30 days": "1-30 Days",
-            "1-30 Days": "1-30 Days",
-            "30-60 Days": "31-60 Days",
-            "30-60 days": "31-60 Days",
-            "31-60 Days": "31-60 Days",
-            "31-60 days": "31-60 Days",
-            ">60 Days": "> 60 Days",
-            ">60 days": "> 60 Days",
-            "> 60 Days": "> 60 Days",
-            "> 60 days": "> 60 Days",
-            "nan": None,
-        })
-    if "Ageing" not in df.columns:
-        if "Days" in df.columns:
-            def classify(d):
-                if pd.isna(d):
-                    return None
-                if d <= 30:
-                    return "1-30 Days"
-                elif d <= 60:
-                    return "31-60 Days"
-                else:
-                    return "> 60 Days"
-            df["Ageing"] = df["Days"].apply(classify)
-        elif "Ticket Created Date" in df.columns:
-            days_open = (pd.Timestamp.now() - df["Ticket Created Date"]).dt.days
-            def classify2(d):
-                if pd.isna(d):
-                    return None
-                if d <= 30:
-                    return "1-30 Days"
-                elif d <= 60:
-                    return "31-60 Days"
-                else:
-                    return "> 60 Days"
-            df["Ageing"] = days_open.apply(classify2)
-
-    if "SLA Late" in df.columns:
-        sla = df["SLA Late"]
-        if isinstance(sla, pd.DataFrame):
-            sla = sla.iloc[:, 0]
-        df["SLA Late"] = sla.astype(str).str.strip()
-        sla_num = pd.to_numeric(df["SLA Late"].replace({"nan": None}), errors="coerce")
-        df["SLA Breach"] = sla_num < 0
-    else:
-        df["SLA Breach"] = False
-
-    return df
-
-
-def load_data():
-    all_dfs = []
-    load_errors = []
-
-    excel_files = find_excel_files()
-    log(f"Found {len(excel_files)} Excel files: {[os.path.basename(f) for f in excel_files]}")
-
-    for filepath in excel_files:
-        fname = os.path.basename(filepath)
-        log(f"Scanning: {fname}")
-        sheets = detect_ticket_sheets(filepath)
-        log(f"  Ticket sheets found: {sheets}")
-
-        for sheet_name in sheets:
-            try:
-                log(f"  Reading sheet: {sheet_name}")
-                df = pd.read_excel(filepath, sheet_name=sheet_name, header=HEADER_ROW, engine="openpyxl")
-                df = df.dropna(how="all")
-                df["_row_idx"] = HEADER_ROW + 1 + df.index
-                df = standardize_columns(df)
-                if df.empty:
-                    log(f"  Empty after standardize")
-                    continue
-
-                df["Client"] = sheet_name
-                df["Source File"] = fname
-                all_dfs.append(df)
-                log(f"  Loaded: {len(df)} rows, cols: {list(df.columns)[:10]}")
-            except Exception as e:
-                msg = f"{fname}/{sheet_name}: {str(e)[:200]}"
-                log(msg, "ERROR")
-                load_errors.append(msg)
-
-    if not all_dfs:
-        log("No data loaded from any file!", "ERROR")
-        return pd.DataFrame(), load_errors
-
-    df = pd.concat(all_dfs, ignore_index=True)
-    log(f"Combined from all files: {len(df)} rows")
-
-    df = convert_dtypes(df)
-
-    if "Ticket No" in df.columns:
-        tn = df["Ticket No"]
-        if isinstance(tn, pd.DataFrame):
-            tn = tn.iloc[:, 0]
-        mask = tn.astype(str).str.match(r"^T/", na=False)
-        df = df[mask]
-        log(f"After Ticket No filter: {len(df)} rows")
-    else:
-        log("Ticket No column missing in all data!", "WARNING")
-
-    log(f"Final: {len(df)} rows, {len(df.columns)} cols")
-    return df, load_errors
+def load_data(filters=None):
+    ensure_schema()
+    df = db.fetch_tickets_df(filters, conn=request_conn())
+    return df, []
 
 
 def load_project_data():
-    try:
-        files = find_excel_files()
-        for fp in files:
-            xl = pd.ExcelFile(fp, engine="openpyxl")
-            if "Client Project" in xl.sheet_names:
-                fname = os.path.basename(fp)
-                df = pd.read_excel(fp, sheet_name="Client Project", header=0, engine="openpyxl")
-                df = df.dropna(how="all")
-                df["_row_idx"] = 1 + df.index
-                df["_source_file"] = fname
-                if "Client" in df.columns:
-                    df["Client"] = df["Client"].ffill()
-                for c in ["Start date", "Due date", "Target Date"]:
-                    if c in df.columns:
-                        df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
-                if "Percentage" in df.columns:
-                    df["Percentage"] = pd.to_numeric(df["Percentage"].astype(str).str.replace("%", ""), errors="coerce")
-                if "Overall Progress Task (%)" in df.columns:
-                    df["Overall Progress Task (%)"] = pd.to_numeric(df["Overall Progress Task (%)"].astype(str).str.replace("%", ""), errors="coerce")
-                return df
-        return pd.DataFrame()
-    except Exception as e:
-        log(f"Error loading project data: {e}", "ERROR")
-        return pd.DataFrame()
+    ensure_schema()
+    return db.fetch_projects_df(conn=request_conn())
 
 
 def build_warranty_charts(df):
@@ -314,7 +165,7 @@ def build_warranty_charts(df):
         sc.columns = ["Status", "Count"]
         fig = px.pie(sc, names="Status", values="Count", title="Warranty Ticket Status",
                       color="Status", color_discrete_map=COLORS, hole=0.3)
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
         charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Task Type" in warranty_df.columns:
@@ -378,7 +229,7 @@ def build_project_charts(df):
         sc.columns = ["Status", "Count"]
         fig = px.pie(sc, names="Status", values="Count", title="Project Status Progress",
                       hole=0.3)
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Start date" in df.columns and "Due date" in df.columns and "Title" in df.columns:
@@ -406,8 +257,8 @@ def build_project_charts(df):
                     fig.update_yaxes(autorange="reversed", title=None)
                     fig.update_xaxes(title="Tarikh")
                     fig.update_layout(
-                        template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#c7cbe0"), showlegend=False,
+                        template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#374151"), showlegend=False,
                         height=max(200, 30*len(cdf)),
                     )
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'
@@ -424,66 +275,6 @@ def build_project_charts(df):
     charts["detail_data"] = detail.to_dict("records")
 
     return charts
-
-
-def apply_filters(df, args):
-    if "Source File" in df.columns:
-        sources = sorted(df["Source File"].unique())
-        selected = args.getlist("source_file")
-        if selected:
-            df = df[df["Source File"].isin(selected)]
-
-    if "Ticket Created Date" in df.columns:
-        valid_dates = df["Ticket Created Date"].dropna()
-        if len(valid_dates) > 0:
-            start_str = args.get("date_start")
-            end_str = args.get("date_end")
-            if start_str:
-                try:
-                    start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
-                    df = df[df["Ticket Created Date"].dt.date >= start_date]
-                except:
-                    pass
-            if end_str:
-                try:
-                    end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
-                    df = df[df["Ticket Created Date"].dt.date <= end_date]
-                except:
-                    pass
-
-    if "Client" in df.columns:
-        clients = sorted(df["Client"].unique())
-        selected = args.getlist("client")
-        if selected:
-            df = df[df["Client"].isin(selected)]
-
-    if "Priority" in df.columns:
-        priorities = sorted(df["Priority"].dropna().unique())
-        selected = args.getlist("priority")
-        if selected:
-            df = df[df["Priority"].isin(selected)]
-
-    if "Ticket Status" in df.columns:
-        statuses = sorted(df["Ticket Status"].dropna().unique())
-        selected = args.getlist("status")
-        if selected:
-            df = df[df["Ticket Status"].isin(selected)]
-
-    if "Task Type" in df.columns:
-        task_types = sorted(df["Task Type"].dropna().unique())
-        selected = args.getlist("task_type")
-        if selected:
-            df = df[df["Task Type"].isin(selected)]
-
-    search_term = args.get("search", "")
-    if search_term:
-        mask = pd.Series(False, index=df.index)
-        for col in ["Ticket Detail", "Ticket Title", "Ticket No", "Ticket Category", "Company", "Project"]:
-            if col in df.columns:
-                mask = mask | df[col].astype(str).str.contains(search_term, case=False, na=False)
-        df = df[mask]
-
-    return df
 
 
 def build_charts(df):
@@ -522,7 +313,7 @@ def build_charts(df):
             title="Ticket Status Distribution", color="Status",
             color_discrete_map=COLORS, hole=0.3,
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
         charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Priority" in df.columns:
@@ -533,7 +324,7 @@ def build_charts(df):
             title="Priority Distribution", color="Keutamaan",
             color_discrete_map=PRIORITY_COLORS, hole=0.3,
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
         charts["priority_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
@@ -545,7 +336,7 @@ def build_charts(df):
             title="Tickets by Client", color="Client",
             color_discrete_sequence=client_colors, text="Bilangan",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False, xaxis_tickangle=-45)
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
         charts["client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -564,7 +355,7 @@ def build_priority_charts(df):
         title="Priority Distribution", color="Keutamaan",
         color_discrete_map=PRIORITY_COLORS, hole=0.4,
     )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
     charts["priority_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Status" in df.columns:
@@ -574,7 +365,7 @@ def build_priority_charts(df):
             color="Ticket Status", title="Priority by Status",
             color_discrete_map=COLORS, barmode="group",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["priority_status_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
@@ -613,7 +404,7 @@ def build_ageing_charts(df):
                 color="Kumpulan Umur", color_discrete_map=AGEING_COLORS,
                 text="Bilangan", title=client,
             )
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False)
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
             charts["ageing_clients"][client] = {
                 "count": int(len(dc)),
                 "chart": fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False}),
@@ -628,7 +419,7 @@ def build_ageing_charts(df):
                 title="Days Open Distribution", color_discrete_sequence=["#3498db"],
                 marginal="box",
             )
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["days_hist"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "SLA Breach" in df.columns and "Client" in df.columns:
@@ -639,7 +430,7 @@ def build_ageing_charts(df):
             title="Total SLA Breaches", color_discrete_sequence=["#e74c3c"],
             text="Pelanggaran SLA",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), xaxis_tickangle=-45)
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
         charts["sla_breach_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -674,7 +465,6 @@ def build_client_comparison_charts(df):
     exclude_clients = ["Client Warranty", "KUIPS"]
     chart_clients = client_stats[~client_stats["Client"].isin(exclude_clients)]
 
-    # Count by Status (filtered)
     df_filtered = df[~df["Client"].isin(exclude_clients)]
     if "Ticket Status" in df_filtered.columns:
         status_counts = df_filtered["Ticket Status"].value_counts().reset_index()
@@ -685,10 +475,9 @@ def build_client_comparison_charts(df):
             color="Status", color_discrete_sequence=px.colors.qualitative.Plotly[:len(status_counts)],
             text="Bilangan",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["count_by_status"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
-    # Status pivot table (filtered)
     if "Ticket Status" in df_filtered.columns:
         pivot = df_filtered.groupby(["Client", "Ticket Status"]).size().unstack(fill_value=0)
         pivot["Total"] = pivot.sum(axis=1)
@@ -700,7 +489,7 @@ def build_client_comparison_charts(df):
         chart_clients, x="Client", y="Jumlah",
         title="Total Tickets by Client", color="Client", text="Jumlah",
     )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False, xaxis_tickangle=-45)
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
     charts["client_total_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     status_order = ["Pending", "In Progress", "Completed", "Closed"]
@@ -709,11 +498,11 @@ def build_client_comparison_charts(df):
         fig = go.Figure()
         for col in status_cols:
             color = COLORS.get(col, "#95a5a6")
-            fig.add_trace(go.Bar(name=col, x=chart_clients["Client"], y=chart_clients[col], marker_color=color, text=chart_clients[col], textposition="outside", textfont=dict(color="#c7cbe0", size=10)))
+            fig.add_trace(go.Bar(name=col, x=chart_clients["Client"], y=chart_clients[col], marker_color=color, text=chart_clients[col], textposition="outside", textfont=dict(color="#374151", size=10)))
         fig.update_layout(
             barmode="group", title="Status by Client",
-            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#c7cbe0"), xaxis_tickangle=-45,
+            template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#374151"), xaxis_tickangle=-45,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         )
         charts["status_by_client"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
@@ -730,7 +519,7 @@ def build_client_comparison_charts(df):
                 cats = [c.replace("Priority_", "") for c in categories]
                 cats.append(cats[0])
                 fig.add_trace(go.Scatterpolar(r=values, theta=cats, fill="toself", name=row["Client"]))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True)), title="Priority Profile by Client", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True)), title="Priority Profile by Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["client_radar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -754,7 +543,7 @@ def build_timeline_charts(df):
         title="Tickets Created by Month", markers=True,
         color_discrete_sequence=["#3498db"],
     )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
     charts["timeline_created"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Completed Date" in df.columns:
@@ -767,13 +556,13 @@ def build_timeline_charts(df):
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Dicipta"], mode="lines+markers", name="Dicipta", line=dict(color="#3498db", width=2)))
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Selesai"], mode="lines+markers", name="Selesai", line=dict(color="#2ecc71", width=2)))
-            fig.update_layout(title="Created vs Completed", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), xaxis_tickangle=-45)
+            fig.update_layout(title="Created vs Completed", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
             charts["timeline_created_vs_completed"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
         client_monthly = df_dated.groupby(["Bulan", "Client"]).size().reset_index(name="Bilangan")
         fig = px.area(client_monthly, x="Bulan", y="Bilangan", color="Client", title="Tickets by Client and Month")
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["timeline_client_area"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Category" in df.columns:
@@ -782,7 +571,7 @@ def build_timeline_charts(df):
             top_cats = df_dated["Ticket Category"].value_counts().head(8).index.tolist()
             cat_monthly = cat_monthly[cat_monthly["Ticket Category"].isin(top_cats)]
             fig = px.line(cat_monthly, x="Bulan", y="Bilangan", color="Ticket Category", title="Tickets by Category (Top 8)", markers=True)
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["timeline_category"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -796,7 +585,7 @@ def build_sla_charts(df):
 
     exclude_clients = ["Client Warranty", "KUIPS"]
     if "Client" in df.columns:
-        df = df[~df["Client"].isin(exclude_clients)]
+        df = df[~df["Client"].isin(exclude_clients)].copy()
 
     total = len(df)
     breaches = df["SLA Breach"].sum()
@@ -818,7 +607,7 @@ def build_sla_charts(df):
             threshold=dict(line=dict(color="white", width=2), thickness=0.75, value=compliance_rate),
         ),
     ))
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), height=350)
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), height=350)
     charts["sla_gauge"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
@@ -832,7 +621,7 @@ def build_sla_charts(df):
             color="Kadar Pematuhan (%)", color_continuous_scale=["#e74c3c", "#f39c12", "#2ecc71"],
             text="Kadar Pematuhan (%)",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["sla_client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
         if "Ticket Status" in df.columns:
@@ -842,8 +631,8 @@ def build_sla_charts(df):
                 "Pending": "Pending + In Progress",
                 "In Progress": "Pending + In Progress",
             }
-            df["_SLA Status Group"] = df["Ticket Status"].replace(status_map)
-            sla_pivot = df.groupby(["Client", "_SLA Status Group"])["SLA Breach"].agg(["sum", "count", "mean"]).reset_index()
+            status_group = df["Ticket Status"].replace(status_map)
+            sla_pivot = df.groupby(["Client", status_group])["SLA Breach"].agg(["sum", "count", "mean"]).reset_index()
             sla_pivot.columns = ["Client", "Status", "Pelanggaran", "Jumlah", "Kadar Pelanggaran"]
             sla_pivot["Kadar Pelanggaran"] = (sla_pivot["Kadar Pelanggaran"] * 100).round(1)
 
@@ -852,7 +641,7 @@ def build_sla_charts(df):
                 age_valid = df["Ageing"].astype(str).str.strip()
                 age_valid = age_valid.ne("") & age_valid.str.lower().ne("nan") & age_valid.ne("Not Due")
 
-                open_counts = df[(df["Ticket Status"].isin(["Pending", "In Progress"])) & sla_valid & age_valid].groupby("Client").size()
+                open_counts = df[df["Ticket Status"].isin(["Pending", "In Progress"]) & sla_valid & age_valid].groupby("Client").size()
                 sla_pivot["Open (SLA+Ageing)"] = sla_pivot.apply(
                     lambda r: int(open_counts.get(r["Client"], 0)) if r["Status"] == "Pending + In Progress" else "",
                     axis=1,
@@ -863,62 +652,57 @@ def build_sla_charts(df):
     return charts
 
 
-def get_filter_options(df):
-    options = {}
-    if "Source File" in df.columns:
-        options["source_files"] = sorted(df["Source File"].unique())
-    if "Client" in df.columns:
-        options["clients"] = sorted(df["Client"].unique())
-    if "Priority" in df.columns:
-        options["priorities"] = sorted(df["Priority"].dropna().unique())
-    if "Ticket Status" in df.columns:
-        options["statuses"] = sorted(df["Ticket Status"].dropna().unique())
-    if "Task Type" in df.columns:
-        options["task_types"] = sorted(df["Task Type"].dropna().unique())
-    if "Ticket Created Date" in df.columns:
-        valid_dates = df["Ticket Created Date"].dropna()
-        if len(valid_dates) > 0:
-            options["min_date"] = valid_dates.min().strftime("%Y-%m-%d")
-            options["max_date"] = valid_dates.max().strftime("%Y-%m-%d")
-    return options
-
-
 @app.route("/")
 def index():
-    df, load_errors = load_data()
-    df_filtered = apply_filters(df, request.args)
+    filters = parse_filters(request.args)
+    try:
+        df, load_errors = load_data(filters)
+    except Exception as e:
+        log(f"DB error loading tickets: {e}", "ERROR")
+        df, load_errors = pd.DataFrame(), [str(e)]
 
-    filter_options = get_filter_options(df)
+    try:
+        filter_options = db.get_filter_metadata(conn=request_conn())
+    except Exception as e:
+        log(f"DB error loading filter metadata: {e}", "ERROR")
+        filter_options = {}
     filter_options["search"] = request.args.get("search", "")
     filter_options["date_start"] = request.args.get("date_start", "")
     filter_options["date_end"] = request.args.get("date_end", "")
-    filter_options["selected_source_files"] = request.args.getlist("source_file")
-    filter_options["selected_clients"] = request.args.getlist("client")
-    filter_options["selected_priorities"] = request.args.getlist("priority")
-    filter_options["selected_statuses"] = request.args.getlist("status")
-    filter_options["selected_task_types"] = request.args.getlist("task_type")
+    filter_options["selected_clients"] = filters["clients"]
+    filter_options["selected_priorities"] = filters["priorities"]
+    filter_options["selected_statuses"] = filters["statuses"]
+    filter_options["selected_task_types"] = filters["task_types"]
 
-    has_data = not df_filtered.empty
+    has_data = not df.empty
+    try:
+        counts = db.get_counts(conn=request_conn())
+    except Exception:
+        counts = {"tickets": len(df), "projects": 0, "last_updated": None}
+
     data_info = {
-        "total_raw": len(df),
-        "total_filtered": len(df_filtered),
-        "excel_files": [os.path.basename(f) for f in find_excel_files()],
+        "total_raw": counts.get("tickets", len(df)),
+        "total_filtered": len(df),
         "load_errors": load_errors,
         "columns": list(df.columns) if not df.empty else [],
-        "source_files": list(df["Source File"].unique()) if not df.empty and "Source File" in df.columns else [],
+        "counts": counts,
     }
 
-    project_df = load_project_data()
+    try:
+        project_df = load_project_data()
+    except Exception as e:
+        log(f"DB error loading projects: {e}", "ERROR")
+        project_df = pd.DataFrame()
     has_project = not project_df.empty
 
     if has_data:
-        overview_charts = build_charts(df_filtered)
-        priority_charts = build_priority_charts(df_filtered)
-        ageing_charts = build_ageing_charts(df_filtered)
-        comparison_charts = build_client_comparison_charts(df_filtered)
-        timeline_charts = build_timeline_charts(df_filtered)
-        sla_charts = build_sla_charts(df_filtered)
-        warranty_charts = build_warranty_charts(df_filtered)
+        overview_charts = build_charts(df)
+        priority_charts = build_priority_charts(df)
+        ageing_charts = build_ageing_charts(df)
+        comparison_charts = build_client_comparison_charts(df)
+        timeline_charts = build_timeline_charts(df)
+        sla_charts = build_sla_charts(df)
+        warranty_charts = build_warranty_charts(df)
         project_charts = build_project_charts(project_df)
     else:
         overview_charts = priority_charts = ageing_charts = {}
@@ -931,10 +715,10 @@ def index():
         "Ticket Created Date", "Ticket Completed Date", "Ticket Closed Date",
         "Days to Close", "Ageing", "SLA Breach",
     ]
-    avail_cols = [c for c in display_cols if c in df_filtered.columns]
+    avail_cols = [c for c in display_cols if c in df.columns]
     meta_cols = ["_row_idx", "Source File"]
-    detail_cols = avail_cols + [c for c in meta_cols if c in df_filtered.columns]
-    detail_df = df_filtered[detail_cols].copy() if has_data and detail_cols else pd.DataFrame()
+    detail_cols = avail_cols + [c for c in meta_cols if c in df.columns]
+    detail_df = df[detail_cols].copy() if has_data and detail_cols else pd.DataFrame()
 
     if "Ticket Created Date" in detail_df.columns:
         detail_df["Ticket Created Date"] = detail_df["Ticket Created Date"].dt.strftime("%d/%m/%Y")
@@ -950,10 +734,10 @@ def index():
         detail_by_client.setdefault(client, []).append(row)
 
     ageing_list_data = {}
-    if has_data and "Ageing" in df_filtered.columns and df_filtered["Ageing"].notna().sum() > 0:
+    if has_data and "Ageing" in df.columns and df["Ageing"].notna().sum() > 0:
         age_order = ["1-30 Days", "31-60 Days", "> 60 Days"]
-        ageing_cols = [c for c in ["Client", "Ticket No", "Ticket Title", "Ticket Status", "Priority", "Ticket Created Date", "Days", "_row_idx", "Source File"] if c in df_filtered.columns]
-        ageing_df = df_filtered.dropna(subset=["Ageing"]).copy()
+        ageing_cols = [c for c in ["Client", "Ticket No", "Ticket Title", "Ticket Status", "Priority", "Ticket Created Date", "Days", "_row_idx", "Source File"] if c in df.columns]
+        ageing_df = df.dropna(subset=["Ageing"]).copy()
         if "Ticket Created Date" in ageing_df.columns:
             ageing_df["Ticket Created Date"] = ageing_df["Ticket Created Date"].dt.strftime("%d/%m/%Y")
         ageing_list_data = {
@@ -994,47 +778,105 @@ def index():
     )
 
 
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    ensure_schema()
+
+    files = request.files.getlist("file")
+    if not files or all(f.filename == "" for f in files):
+        return jsonify({"success": False, "error": "No file selected"}), 400
+
+    form_client = request.form.get("client", "").strip()
+
+    summary = {"files": [], "tickets_inserted": 0, "tickets_updated": 0,
+               "projects_inserted": 0, "projects_updated": 0, "errors": []}
+
+    for f in files:
+        fname = f.filename
+        ext = os.path.splitext(fname)[1].lower()
+        raw = f.read()
+        try:
+            if ext == ".csv":
+                df = pd.read_csv(io.BytesIO(raw))
+                client = form_client or (df["Client"].iloc[0] if "Client" in df.columns and len(df) else os.path.splitext(fname)[0])
+                parsed = parse_ticket_sheet(df, client=client, source_file=fname)
+                ins, upd = db.upsert_tickets(parsed, conn=request_conn())
+                summary["tickets_inserted"] += ins
+                summary["tickets_updated"] += upd
+                summary["files"].append({"name": fname, "rows_found": len(parsed)})
+
+            elif ext in (".xlsx", ".xls"):
+                buf = io.BytesIO(raw)
+                sheets = detect_ticket_sheets(buf)
+                rows_found = 0
+                for sheet_name in sheets:
+                    buf.seek(0)
+                    df = pd.read_excel(buf, sheet_name=sheet_name, header=1, engine="openpyxl")
+                    parsed = parse_ticket_sheet(df, client=sheet_name, source_file=fname)
+                    if parsed.empty:
+                        continue
+                    ins, upd = db.upsert_tickets(parsed, conn=request_conn())
+                    summary["tickets_inserted"] += ins
+                    summary["tickets_updated"] += upd
+                    rows_found += len(parsed)
+
+                buf.seek(0)
+                xl = pd.ExcelFile(buf, engine="openpyxl")
+                if "Client Project" in xl.sheet_names:
+                    buf.seek(0)
+                    pdf = pd.read_excel(buf, sheet_name="Client Project", header=0, engine="openpyxl")
+                    parsed_p = parse_project_sheet(pdf, source_file=fname)
+                    if not parsed_p.empty:
+                        ins_p, upd_p = db.upsert_projects(parsed_p, conn=request_conn())
+                        summary["projects_inserted"] += ins_p
+                        summary["projects_updated"] += upd_p
+
+                summary["files"].append({"name": fname, "rows_found": rows_found})
+
+            else:
+                summary["errors"].append(f"{fname}: unsupported file type (use .csv or .xlsx)")
+
+        except Exception as e:
+            log(f"Upload error on {fname}: {e}", "ERROR")
+            summary["errors"].append(f"{fname}: {str(e)[:300]}")
+
+    summary["success"] = len(summary["errors"]) == 0
+    return jsonify(summary)
+
+
+@app.route("/api/restart", methods=["POST"])
+def api_restart():
+    ensure_schema()
+    try:
+        db.reset_all(conn=request_conn())
+        return jsonify({"success": True})
+    except Exception as e:
+        log(f"Restart error: {e}", "ERROR")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/status")
+def api_status():
+    ensure_schema()
+    try:
+        return jsonify({"success": True, **db.get_counts(conn=request_conn())})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/save", methods=["POST"])
 def api_save():
     data = request.get_json()
-    source_file = data.get("source_file")
-    sheet = data.get("sheet")
     row_idx = data.get("row_idx")
     column = data.get("column")
     value = data.get("value")
 
-    files = find_excel_files()
-    filepath = None
-    for f in files:
-        if os.path.basename(f) == source_file:
-            filepath = f
-            break
-    if not filepath:
-        return {"success": False, "error": f"File not found: {source_file}"}
+    db_column = TICKET_DB_COL_BY_DISPLAY.get(column)
+    if not db_column:
+        return {"success": False, "error": f"Column not editable: {column}"}
 
     try:
-        from openpyxl import load_workbook
-        wb = load_workbook(filepath)
-        if sheet not in wb.sheetnames:
-            return {"success": False, "error": f"Sheet not found: {sheet}"}
-        ws = wb[sheet]
-
-        header_row_idx = HEADER_ROW + 1
-        col_idx = None
-        for cell in ws[header_row_idx]:
-            if cell.value:
-                cl = str(cell.value).lower().strip()
-                if cl in COLUMN_MAPPING and COLUMN_MAPPING[cl] == column:
-                    col_idx = cell.column
-                    break
-
-        if col_idx is None:
-            return {"success": False, "error": f"Column not found: {column}"}
-
-        excel_row = int(row_idx) + 1
-        ws.cell(row=excel_row, column=col_idx, value=value)
-        wb.save(filepath)
-        wb.close()
+        db.update_ticket_field(int(row_idx), db_column, value, conn=request_conn())
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}

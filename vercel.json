@@ -2,7 +2,7 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "templates/**"
+      "includeFiles": "{templates/**,static/**,sw.svg,sw.js,manifest.json}"
     }
   }
 }

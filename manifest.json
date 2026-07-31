@@ -1,0 +1,16 @@
+{
+  "name": "Software Wizard (M) Sdn Bhd - Client Issues Dashboard",
+  "short_name": "SW Dashboard",
+  "description": "Client ticket, project and SLA analytics dashboard for Software Wizard (M) Sdn Bhd.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef1f6",
+  "theme_color": "#2c5f82",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

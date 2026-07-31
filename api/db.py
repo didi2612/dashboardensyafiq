@@ -1,0 +1,272 @@
+"""Neon/Postgres data layer.
+
+All ticket & project data lives in Postgres now instead of bundled Excel
+files (Vercel's filesystem is read-only/ephemeral anyway, so that never
+would have worked in production). Uploads are *merged* in: existing rows
+are matched by a natural key and updated in place, new rows are inserted,
+nothing is ever silently overwritten by an older file.
+"""
+import os
+import warnings
+
+import pandas as pd
+import psycopg2
+import psycopg2.extras
+
+warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
+
+TICKET_DB_COLUMNS = [
+    ("Client", "client"),
+    ("Ticket No", "ticket_no"),
+    ("Task Type", "task_type"),
+    ("Project", "project"),
+    ("Company", "company"),
+    ("Ticket Title", "ticket_title"),
+    ("Ticket Detail", "ticket_detail"),
+    ("Ticket Category", "ticket_category"),
+    ("Priority", "priority"),
+    ("Ticket Created Date", "ticket_created_date"),
+    ("Ticket Completed Date", "ticket_completed_date"),
+    ("Ticket Closed Date", "ticket_closed_date"),
+    ("Ticket Status", "ticket_status"),
+    ("SLA Dateline", "sla_dateline"),
+    ("SLA Late", "sla_late"),
+    ("Days", "days"),
+    ("Ageing", "ageing"),
+    ("Days to Close", "days_to_close"),
+    ("SLA Breach", "sla_breach"),
+    ("Source File", "source_file"),
+]
+
+PROJECT_DB_COLUMNS = [
+    ("Client", "client"),
+    ("Title", "title"),
+    ("Category", "category"),
+    ("Progress", "progress"),
+    ("Priority", "priority"),
+    ("Start date", "start_date"),
+    ("Due date", "due_date"),
+    ("Target Date", "target_date"),
+    ("Assigned to", "assigned_to"),
+    ("Status Progress", "status_progress"),
+    ("Percentage", "percentage"),
+    ("Overall Progress Task (%)", "overall_progress_task"),
+    ("Source File", "source_file"),
+]
+
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS tickets (
+    id SERIAL PRIMARY KEY,
+    client TEXT NOT NULL,
+    ticket_no TEXT NOT NULL,
+    task_type TEXT,
+    project TEXT,
+    company TEXT,
+    ticket_title TEXT,
+    ticket_detail TEXT,
+    ticket_category TEXT,
+    priority TEXT,
+    ticket_created_date DATE,
+    ticket_completed_date DATE,
+    ticket_closed_date DATE,
+    ticket_status TEXT,
+    sla_dateline DATE,
+    sla_late TEXT,
+    days NUMERIC,
+    ageing TEXT,
+    days_to_close NUMERIC,
+    sla_breach BOOLEAN DEFAULT FALSE,
+    source_file TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (client, ticket_no)
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+    id SERIAL PRIMARY KEY,
+    client TEXT,
+    title TEXT,
+    category TEXT,
+    progress TEXT,
+    priority TEXT,
+    start_date DATE,
+    due_date DATE,
+    target_date DATE,
+    assigned_to TEXT,
+    status_progress TEXT,
+    percentage NUMERIC,
+    overall_progress_task NUMERIC,
+    source_file TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (client, title, start_date)
+);
+"""
+
+
+def get_conn():
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+    return psycopg2.connect(url)
+
+
+def init_schema():
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(SCHEMA_SQL)
+        conn.commit()
+
+
+def _records_for_insert(df, columns):
+    """DataFrame -> list of tuples in `columns` order, NaN/NaT -> None."""
+    for display_col, _ in columns:
+        if display_col not in df.columns:
+            df[display_col] = None
+    df = df[[c for c, _ in columns]].copy()
+    for col in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = df[col].dt.date
+    df = df.astype(object).where(pd.notnull(df), None)
+    return list(df.itertuples(index=False, name=None))
+
+
+def upsert_tickets(df):
+    """Insert new tickets / update existing ones (matched by client + ticket no).
+
+    Returns (inserted_count, updated_count).
+    """
+    if df.empty:
+        return 0, 0
+
+    records = _records_for_insert(df, TICKET_DB_COLUMNS)
+    db_cols = [c for _, c in TICKET_DB_COLUMNS]
+    update_cols = [c for c in db_cols if c not in ("client", "ticket_no")]
+    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+
+    sql = f"""
+        INSERT INTO tickets ({', '.join(db_cols)})
+        VALUES %s
+        ON CONFLICT (client, ticket_no) DO UPDATE SET
+            {set_clause},
+            updated_at = now()
+        RETURNING (xmax = 0) AS inserted
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            results = psycopg2.extras.execute_values(cur, sql, records, page_size=500, fetch=True)
+        conn.commit()
+
+    inserted = sum(1 for r in results if r[0])
+    updated = len(results) - inserted
+    return inserted, updated
+
+
+def upsert_projects(df):
+    if df.empty:
+        return 0, 0
+
+    records = _records_for_insert(df, PROJECT_DB_COLUMNS)
+    db_cols = [c for _, c in PROJECT_DB_COLUMNS]
+    key_cols = ("client", "title", "start_date")
+    update_cols = [c for c in db_cols if c not in key_cols]
+    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+
+    sql = f"""
+        INSERT INTO projects ({', '.join(db_cols)})
+        VALUES %s
+        ON CONFLICT (client, title, start_date) DO UPDATE SET
+            {set_clause},
+            updated_at = now()
+        RETURNING (xmax = 0) AS inserted
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            results = psycopg2.extras.execute_values(cur, sql, records, page_size=500, fetch=True)
+        conn.commit()
+
+    inserted = sum(1 for r in results if r[0])
+    updated = len(results) - inserted
+    return inserted, updated
+
+
+def fetch_tickets_df():
+    db_cols = [c for _, c in TICKET_DB_COLUMNS]
+    display_cols = [c for c, _ in TICKET_DB_COLUMNS]
+    sql = f"SELECT id, {', '.join(db_cols)} FROM tickets ORDER BY id"
+
+    with get_conn() as conn:
+        df = pd.read_sql_query(sql, conn)
+
+    if df.empty:
+        return pd.DataFrame(columns=["_row_idx"] + display_cols)
+
+    df = df.rename(columns=dict(zip(db_cols, display_cols)))
+    df = df.rename(columns={"id": "_row_idx"})
+
+    for col in ["Ticket Created Date", "Ticket Completed Date", "Ticket Closed Date", "SLA Dateline"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col])
+
+    return df
+
+
+def fetch_projects_df():
+    db_cols = [c for _, c in PROJECT_DB_COLUMNS]
+    display_cols = [c for c, _ in PROJECT_DB_COLUMNS]
+    sql = f"SELECT id, {', '.join(db_cols)} FROM projects ORDER BY id"
+
+    with get_conn() as conn:
+        df = pd.read_sql_query(sql, conn)
+
+    if df.empty:
+        return pd.DataFrame(columns=["_row_idx"] + display_cols)
+
+    df = df.rename(columns=dict(zip(db_cols, display_cols)))
+    df = df.rename(columns={"id": "_row_idx", "Source File": "_source_file"})
+
+    for col in ["Start date", "Due date", "Target Date"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col])
+
+    return df
+
+
+def get_counts():
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM tickets")
+            tickets = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM projects")
+            projects = cur.fetchone()[0]
+            cur.execute("SELECT max(updated_at) FROM tickets")
+            last_ticket_update = cur.fetchone()[0]
+    return {
+        "tickets": tickets,
+        "projects": projects,
+        "last_updated": last_ticket_update.strftime("%d/%m/%Y %H:%M") if last_ticket_update else None,
+    }
+
+
+def reset_all():
+    """Wipe all ticket & project data. Used by the 'Restart' button."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE TABLE tickets RESTART IDENTITY")
+            cur.execute("TRUNCATE TABLE projects RESTART IDENTITY")
+        conn.commit()
+
+
+def update_ticket_field(row_id, db_column, value):
+    valid_cols = {c for _, c in TICKET_DB_COLUMNS}
+    if db_column not in valid_cols:
+        raise ValueError(f"Unknown column: {db_column}")
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE tickets SET {db_column} = %s, updated_at = now() WHERE id = %s",
+                (value, row_id),
+            )
+        conn.commit()

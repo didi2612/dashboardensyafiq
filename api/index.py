@@ -1,291 +1,65 @@
+import io
+import os
+import sys
+from datetime import datetime
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import plotly.io as pio
-import os, sys, glob, json
-from datetime import datetime, timedelta
-from flask import Flask, render_template, request
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, jsonify
+
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env.local"), override=True)
+
+import db
+from data_utils import (
+    COLORS, PRIORITY_COLORS, AGEING_COLORS,
+    parse_ticket_sheet, parse_project_sheet, detect_ticket_sheets,
+)
 
 app = Flask(
     __name__,
     template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates"),
 )
 
+MAX_UPLOAD_MB = 25
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+
+
 def log(msg, level="INFO"):
     print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {level} {msg}", flush=True)
 
+
 log("=" * 50)
-log(f"Dashboard starting (Flask)")
+log("Dashboard starting (Flask + Neon Postgres)")
 log(f"Python: {sys.version}")
-log(f"CWD: {os.getcwd()}")
 
 pio.templates.default = "plotly_dark"
 
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
-HEADER_ROW = 1
+TICKET_DB_COL_BY_DISPLAY = {display: col for display, col in db.TICKET_DB_COLUMNS}
 
-COLORS = {
-    "Completed": "#34d399",
-    "Closed": "#60a5fa",
-    "Pending": "#fbbf24",
-    "InProgress": "#f87171",
-    "Inprogress": "#f87171",
-    "Open": "#a78bfa",
-    "Cancelled": "#94a3b8",
-    "On Hold": "#22d3ee",
-}
-PRIORITY_COLORS = {"High": "#f87171", "Medium": "#60a5fa", "Low": "#34d399"}
-AGEING_COLORS = {"1-30 Days": "#34d399", "31-60 Days": "#fbbf24", "> 60 Days": "#f87171"}
-
-COLUMN_MAPPING = {
-    "ticket no": "Ticket No",
-    "ticket number": "Ticket No",
-    "ticket_no": "Ticket No",
-    "ticket id": "Ticket No",
-    "task type": "Task Type",
-    "task_type": "Task Type",
-    "project": "Project",
-    "company": "Company",
-    "ticket title": "Ticket Title",
-    "ticket_title": "Ticket Title",
-    "ticket detail": "Ticket Detail",
-    "ticket_detail": "Ticket Detail",
-    "ticket desc": "Ticket Detail",
-    "detail": "Ticket Detail",
-    "description": "Ticket Detail",
-    "ticket category": "Ticket Category",
-    "ticket_category": "Ticket Category",
-    "category": "Ticket Category",
-    "priority": "Priority",
-    "ticket created date": "Ticket Created Date",
-    "ticket_created_date": "Ticket Created Date",
-    "created date": "Ticket Created Date",
-    "created": "Ticket Created Date",
-    "date created": "Ticket Created Date",
-    "ticket completed date": "Ticket Completed Date",
-    "ticket_completed_date": "Ticket Completed Date",
-    "completed date": "Ticket Completed Date",
-    "completed": "Ticket Completed Date",
-    "ticket closed date": "Ticket Closed Date",
-    "ticket_closed_date": "Ticket Closed Date",
-    "closed date": "Ticket Closed Date",
-    "closed": "Ticket Closed Date",
-    "ticket status": "Ticket Status",
-    "ticket_status": "Ticket Status",
-    "status": "Ticket Status",
-    "sla dateline": "SLA Dateline",
-    "sla_deadline": "SLA Dateline",
-    "sla": "SLA Dateline",
-    "sla late": "SLA Late",
-    "sla_breach": "SLA Late",
-    "days": "Days",
-    "ageing": "Ageing",
-    "aging": "Ageing",
-}
+_schema_ready = False
 
 
-def find_excel_files():
-    files = glob.glob(os.path.join(DATA_DIR, "*.xlsx"))
-    files = [f for f in files if not os.path.basename(f).startswith("~")]
-    files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
-    return files
-
-
-def detect_ticket_sheets(filepath):
-    try:
-        xl = pd.ExcelFile(filepath, engine="openpyxl")
-        ticket_sheets = []
-        for name in xl.sheet_names:
-            try:
-                df_head = pd.read_excel(filepath, sheet_name=name, header=HEADER_ROW, engine="openpyxl", nrows=3)
-                if "Ticket No" in df_head.columns or "ticket no" in str(df_head.columns).lower():
-                    ticket_sheets.append(name)
-            except Exception:
-                pass
-        return ticket_sheets
-    except Exception as e:
-        log(f"  Cannot open {filepath}: {e}", "ERROR")
-        return []
-
-
-def standardize_columns(df):
-    col_map = {}
-    for col in df.columns:
-        cl = str(col).lower().strip()
-        if cl in COLUMN_MAPPING:
-            col_map[col] = COLUMN_MAPPING[cl]
-    df = df.rename(columns=col_map)
-    df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
-    df = df.loc[:, ~df.columns.duplicated()]
-    return df
-
-
-def convert_dtypes(df):
-    for date_col in ["Ticket Created Date", "Ticket Completed Date", "Ticket Closed Date", "SLA Dateline"]:
-        if date_col in df.columns:
-            df[date_col] = pd.to_datetime(df[date_col], errors="coerce", dayfirst=True)
-
-    if "Ticket Status" in df.columns:
-        ts = df["Ticket Status"]
-        if isinstance(ts, pd.DataFrame):
-            ts = ts.iloc[:, 0]
-        df["Ticket Status"] = ts.astype(str).str.strip()
-        df["Ticket Status"] = df["Ticket Status"].replace({
-            "InProgress": "In Progress",
-            "Inprogress": "In Progress",
-            "nan": None,
-        })
-
-    if "Priority" in df.columns:
-        pr = df["Priority"]
-        if isinstance(pr, pd.DataFrame):
-            pr = pr.iloc[:, 0]
-        df["Priority"] = pr.astype(str).str.strip().str.title()
-        df["Priority"] = df["Priority"].replace({"Nan": None, "None": None})
-
-    if "Ticket Created Date" in df.columns and "Ticket Closed Date" in df.columns:
-        mask = df["Ticket Created Date"].notna() & df["Ticket Closed Date"].notna()
-        df.loc[mask, "Days to Close"] = (df.loc[mask, "Ticket Closed Date"] - df.loc[mask, "Ticket Created Date"]).dt.days
-    elif "Ticket Created Date" in df.columns and "Ticket Completed Date" in df.columns:
-        mask = df["Ticket Created Date"].notna() & df["Ticket Completed Date"].notna()
-        df.loc[mask, "Days to Close"] = (df.loc[mask, "Ticket Completed Date"] - df.loc[mask, "Ticket Created Date"]).dt.days
-
-    if "Days" in df.columns:
-        df["Days"] = pd.to_numeric(df["Days"], errors="coerce")
-
-    if "Ageing" in df.columns:
-        df["Ageing"] = df["Ageing"].astype(str).str.strip().replace({
-            "1-30 days": "1-30 Days",
-            "1-30 Days": "1-30 Days",
-            "30-60 Days": "31-60 Days",
-            "30-60 days": "31-60 Days",
-            "31-60 Days": "31-60 Days",
-            "31-60 days": "31-60 Days",
-            ">60 Days": "> 60 Days",
-            ">60 days": "> 60 Days",
-            "> 60 Days": "> 60 Days",
-            "> 60 days": "> 60 Days",
-            "nan": None,
-        })
-    if "Ageing" not in df.columns:
-        if "Days" in df.columns:
-            def classify(d):
-                if pd.isna(d):
-                    return None
-                if d <= 30:
-                    return "1-30 Days"
-                elif d <= 60:
-                    return "31-60 Days"
-                else:
-                    return "> 60 Days"
-            df["Ageing"] = df["Days"].apply(classify)
-        elif "Ticket Created Date" in df.columns:
-            days_open = (pd.Timestamp.now() - df["Ticket Created Date"]).dt.days
-            def classify2(d):
-                if pd.isna(d):
-                    return None
-                if d <= 30:
-                    return "1-30 Days"
-                elif d <= 60:
-                    return "31-60 Days"
-                else:
-                    return "> 60 Days"
-            df["Ageing"] = days_open.apply(classify2)
-
-    if "SLA Late" in df.columns:
-        sla = df["SLA Late"]
-        if isinstance(sla, pd.DataFrame):
-            sla = sla.iloc[:, 0]
-        df["SLA Late"] = sla.astype(str).str.strip()
-        df["SLA Breach"] = df["SLA Late"].apply(lambda x: x.lower() in ("yes", "1", "true", "late", "y") if pd.notna(x) else False)
-    else:
-        df["SLA Breach"] = False
-
-    return df
+def ensure_schema():
+    global _schema_ready
+    if _schema_ready:
+        return
+    db.init_schema()
+    _schema_ready = True
 
 
 def load_data():
-    all_dfs = []
-    load_errors = []
-
-    excel_files = find_excel_files()
-    log(f"Found {len(excel_files)} Excel files: {[os.path.basename(f) for f in excel_files]}")
-
-    for filepath in excel_files:
-        fname = os.path.basename(filepath)
-        log(f"Scanning: {fname}")
-        sheets = detect_ticket_sheets(filepath)
-        log(f"  Ticket sheets found: {sheets}")
-
-        for sheet_name in sheets:
-            try:
-                log(f"  Reading sheet: {sheet_name}")
-                df = pd.read_excel(filepath, sheet_name=sheet_name, header=HEADER_ROW, engine="openpyxl")
-                df = df.dropna(how="all")
-                df["_row_idx"] = HEADER_ROW + 1 + df.index
-                df = standardize_columns(df)
-                if df.empty:
-                    log(f"  Empty after standardize")
-                    continue
-
-                df["Client"] = sheet_name
-                df["Source File"] = fname
-                all_dfs.append(df)
-                log(f"  Loaded: {len(df)} rows, cols: {list(df.columns)[:10]}")
-            except Exception as e:
-                msg = f"{fname}/{sheet_name}: {str(e)[:200]}"
-                log(msg, "ERROR")
-                load_errors.append(msg)
-
-    if not all_dfs:
-        log("No data loaded from any file!", "ERROR")
-        return pd.DataFrame(), load_errors
-
-    df = pd.concat(all_dfs, ignore_index=True)
-    log(f"Combined from all files: {len(df)} rows")
-
-    df = convert_dtypes(df)
-
-    if "Ticket No" in df.columns:
-        tn = df["Ticket No"]
-        if isinstance(tn, pd.DataFrame):
-            tn = tn.iloc[:, 0]
-        mask = tn.astype(str).str.match(r"^T/", na=False)
-        df = df[mask]
-        log(f"After Ticket No filter: {len(df)} rows")
-    else:
-        log("Ticket No column missing in all data!", "WARNING")
-
-    log(f"Final: {len(df)} rows, {len(df.columns)} cols")
-    return df, load_errors
+    ensure_schema()
+    df = db.fetch_tickets_df()
+    return df, []
 
 
 def load_project_data():
-    try:
-        files = find_excel_files()
-        for fp in files:
-            xl = pd.ExcelFile(fp, engine="openpyxl")
-            if "Client Project" in xl.sheet_names:
-                fname = os.path.basename(fp)
-                df = pd.read_excel(fp, sheet_name="Client Project", header=0, engine="openpyxl")
-                df = df.dropna(how="all")
-                df["_row_idx"] = 1 + df.index
-                df["_source_file"] = fname
-                if "Client" in df.columns:
-                    df["Client"] = df["Client"].ffill()
-                for c in ["Start date", "Due date", "Target Date"]:
-                    if c in df.columns:
-                        df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
-                if "Percentage" in df.columns:
-                    df["Percentage"] = pd.to_numeric(df["Percentage"].astype(str).str.replace("%", ""), errors="coerce")
-                if "Overall Progress Task (%)" in df.columns:
-                    df["Overall Progress Task (%)"] = pd.to_numeric(df["Overall Progress Task (%)"].astype(str).str.replace("%", ""), errors="coerce")
-                return df
-        return pd.DataFrame()
-    except Exception as e:
-        log(f"Error loading project data: {e}", "ERROR")
-        return pd.DataFrame()
+    ensure_schema()
+    return db.fetch_projects_df()
 
 
 def build_warranty_charts(df):
@@ -427,7 +201,6 @@ def build_project_charts(df):
 
 def apply_filters(df, args):
     if "Source File" in df.columns:
-        sources = sorted(df["Source File"].unique())
         selected = args.getlist("source_file")
         if selected:
             df = df[df["Source File"].isin(selected)]
@@ -441,35 +214,31 @@ def apply_filters(df, args):
                 try:
                     start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
                     df = df[df["Ticket Created Date"].dt.date >= start_date]
-                except:
+                except Exception:
                     pass
             if end_str:
                 try:
                     end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
                     df = df[df["Ticket Created Date"].dt.date <= end_date]
-                except:
+                except Exception:
                     pass
 
     if "Client" in df.columns:
-        clients = sorted(df["Client"].unique())
         selected = args.getlist("client")
         if selected:
             df = df[df["Client"].isin(selected)]
 
     if "Priority" in df.columns:
-        priorities = sorted(df["Priority"].dropna().unique())
         selected = args.getlist("priority")
         if selected:
             df = df[df["Priority"].isin(selected)]
 
     if "Ticket Status" in df.columns:
-        statuses = sorted(df["Ticket Status"].dropna().unique())
         selected = args.getlist("status")
         if selected:
             df = df[df["Ticket Status"].isin(selected)]
 
     if "Task Type" in df.columns:
-        task_types = sorted(df["Task Type"].dropna().unique())
         selected = args.getlist("task_type")
         if selected:
             df = df[df["Task Type"].isin(selected)]
@@ -673,7 +442,6 @@ def build_client_comparison_charts(df):
     exclude_clients = ["Client Warranty", "KUIPS"]
     chart_clients = client_stats[~client_stats["Client"].isin(exclude_clients)]
 
-    # Count by Status (filtered)
     df_filtered = df[~df["Client"].isin(exclude_clients)]
     if "Ticket Status" in df_filtered.columns:
         status_counts = df_filtered["Ticket Status"].value_counts().reset_index()
@@ -687,7 +455,6 @@ def build_client_comparison_charts(df):
         fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
         charts["count_by_status"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
-    # Status pivot table (filtered)
     if "Ticket Status" in df_filtered.columns:
         pivot = df_filtered.groupby(["Client", "Ticket Status"]).size().unstack(fill_value=0)
         pivot["Total"] = pivot.sum(axis=1)
@@ -842,7 +609,7 @@ def build_sla_charts(df):
 def get_filter_options(df):
     options = {}
     if "Source File" in df.columns:
-        options["source_files"] = sorted(df["Source File"].unique())
+        options["source_files"] = sorted(df["Source File"].dropna().unique())
     if "Client" in df.columns:
         options["clients"] = sorted(df["Client"].unique())
     if "Priority" in df.columns:
@@ -861,8 +628,13 @@ def get_filter_options(df):
 
 @app.route("/")
 def index():
-    df, load_errors = load_data()
-    df_filtered = apply_filters(df, request.args)
+    try:
+        df, load_errors = load_data()
+    except Exception as e:
+        log(f"DB error loading tickets: {e}", "ERROR")
+        df, load_errors = pd.DataFrame(), [str(e)]
+
+    df_filtered = apply_filters(df, request.args) if not df.empty else df
 
     filter_options = get_filter_options(df)
     filter_options["search"] = request.args.get("search", "")
@@ -875,16 +647,25 @@ def index():
     filter_options["selected_task_types"] = request.args.getlist("task_type")
 
     has_data = not df_filtered.empty
+    try:
+        counts = db.get_counts()
+    except Exception:
+        counts = {"tickets": len(df), "projects": 0, "last_updated": None}
+
     data_info = {
         "total_raw": len(df),
         "total_filtered": len(df_filtered),
-        "excel_files": [os.path.basename(f) for f in find_excel_files()],
         "load_errors": load_errors,
         "columns": list(df.columns) if not df.empty else [],
-        "source_files": list(df["Source File"].unique()) if not df.empty and "Source File" in df.columns else [],
+        "source_files": list(df["Source File"].dropna().unique()) if not df.empty and "Source File" in df.columns else [],
+        "counts": counts,
     }
 
-    project_df = load_project_data()
+    try:
+        project_df = load_project_data()
+    except Exception as e:
+        log(f"DB error loading projects: {e}", "ERROR")
+        project_df = pd.DataFrame()
     has_project = not project_df.empty
 
     if has_data:
@@ -970,47 +751,105 @@ def index():
     )
 
 
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    ensure_schema()
+
+    files = request.files.getlist("file")
+    if not files or all(f.filename == "" for f in files):
+        return jsonify({"success": False, "error": "No file selected"}), 400
+
+    form_client = request.form.get("client", "").strip()
+
+    summary = {"files": [], "tickets_inserted": 0, "tickets_updated": 0,
+               "projects_inserted": 0, "projects_updated": 0, "errors": []}
+
+    for f in files:
+        fname = f.filename
+        ext = os.path.splitext(fname)[1].lower()
+        raw = f.read()
+        try:
+            if ext == ".csv":
+                df = pd.read_csv(io.BytesIO(raw))
+                client = form_client or (df["Client"].iloc[0] if "Client" in df.columns and len(df) else os.path.splitext(fname)[0])
+                parsed = parse_ticket_sheet(df, client=client, source_file=fname)
+                ins, upd = db.upsert_tickets(parsed)
+                summary["tickets_inserted"] += ins
+                summary["tickets_updated"] += upd
+                summary["files"].append({"name": fname, "rows_found": len(parsed)})
+
+            elif ext in (".xlsx", ".xls"):
+                buf = io.BytesIO(raw)
+                sheets = detect_ticket_sheets(buf)
+                rows_found = 0
+                for sheet_name in sheets:
+                    buf.seek(0)
+                    df = pd.read_excel(buf, sheet_name=sheet_name, header=1, engine="openpyxl")
+                    parsed = parse_ticket_sheet(df, client=sheet_name, source_file=fname)
+                    if parsed.empty:
+                        continue
+                    ins, upd = db.upsert_tickets(parsed)
+                    summary["tickets_inserted"] += ins
+                    summary["tickets_updated"] += upd
+                    rows_found += len(parsed)
+
+                buf.seek(0)
+                xl = pd.ExcelFile(buf, engine="openpyxl")
+                if "Client Project" in xl.sheet_names:
+                    buf.seek(0)
+                    pdf = pd.read_excel(buf, sheet_name="Client Project", header=0, engine="openpyxl")
+                    parsed_p = parse_project_sheet(pdf, source_file=fname)
+                    if not parsed_p.empty:
+                        ins_p, upd_p = db.upsert_projects(parsed_p)
+                        summary["projects_inserted"] += ins_p
+                        summary["projects_updated"] += upd_p
+
+                summary["files"].append({"name": fname, "rows_found": rows_found})
+
+            else:
+                summary["errors"].append(f"{fname}: unsupported file type (use .csv or .xlsx)")
+
+        except Exception as e:
+            log(f"Upload error on {fname}: {e}", "ERROR")
+            summary["errors"].append(f"{fname}: {str(e)[:300]}")
+
+    summary["success"] = len(summary["errors"]) == 0
+    return jsonify(summary)
+
+
+@app.route("/api/restart", methods=["POST"])
+def api_restart():
+    ensure_schema()
+    try:
+        db.reset_all()
+        return jsonify({"success": True})
+    except Exception as e:
+        log(f"Restart error: {e}", "ERROR")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/status")
+def api_status():
+    ensure_schema()
+    try:
+        return jsonify({"success": True, **db.get_counts()})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/save", methods=["POST"])
 def api_save():
     data = request.get_json()
-    source_file = data.get("source_file")
-    sheet = data.get("sheet")
     row_idx = data.get("row_idx")
     column = data.get("column")
     value = data.get("value")
 
-    files = find_excel_files()
-    filepath = None
-    for f in files:
-        if os.path.basename(f) == source_file:
-            filepath = f
-            break
-    if not filepath:
-        return {"success": False, "error": f"File not found: {source_file}"}
+    db_column = TICKET_DB_COL_BY_DISPLAY.get(column)
+    if not db_column:
+        return {"success": False, "error": f"Column not editable: {column}"}
 
     try:
-        from openpyxl import load_workbook
-        wb = load_workbook(filepath)
-        if sheet not in wb.sheetnames:
-            return {"success": False, "error": f"Sheet not found: {sheet}"}
-        ws = wb[sheet]
-
-        header_row_idx = HEADER_ROW + 1
-        col_idx = None
-        for cell in ws[header_row_idx]:
-            if cell.value:
-                cl = str(cell.value).lower().strip()
-                if cl in COLUMN_MAPPING and COLUMN_MAPPING[cl] == column:
-                    col_idx = cell.column
-                    break
-
-        if col_idx is None:
-            return {"success": False, "error": f"Column not found: {column}"}
-
-        excel_row = int(row_idx) + 1
-        ws.cell(row=excel_row, column=col_idx, value=value)
-        wb.save(filepath)
-        wb.close()
+        db.update_ticket_field(int(row_idx), db_column, value)
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}

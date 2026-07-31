@@ -216,10 +216,94 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 .edit-mode td input.changed{background:#fff3cd;border-color:#f39c12}
 .editable-cell{cursor:pointer}
 .editable-cell:hover{background:#f0f7ff}
-.save-toast{position:fixed;bottom:24px;right:24px;padding:12px 24px;border-radius:10px;font-weight:600;z-index:9999;display:none;animation:fadeIn 0.3s}
+.save-toast{position:fixed;bottom:24px;right:24px;padding:12px 24px;border-radius:10px;font-weight:600;z-index:9999;display:none;animation:fadeIn 0.3s;max-width:420px}
 .save-toast.success{background:#2ecc71;color:#fff}
 .save-toast.error{background:#e74c3c;color:#fff}
 @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---------- Topbar actions ---------- */
+.topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn-pill{
+  display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:999px;
+  font-family:'Inter',sans-serif;font-weight:700;font-size:0.82rem;cursor:pointer;
+  border:1px solid var(--border-strong);background:rgba(255,255,255,0.04);color:var(--text);
+  transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.btn-pill:hover{background:rgba(255,255,255,0.09);transform:translateY(-1px)}
+.btn-pill.primary{background:var(--gradient);border-color:transparent;color:#fff;box-shadow:0 6px 18px rgba(139,92,246,0.35)}
+.btn-pill.primary:hover{box-shadow:0 8px 22px rgba(139,92,246,0.5)}
+.btn-pill.danger{color:var(--danger);border-color:rgba(248,113,113,0.35)}
+.btn-pill.danger:hover{background:rgba(248,113,113,0.1)}
+.data-pill{
+  font-size:0.72rem;font-weight:600;color:var(--text-dim);padding:6px 12px;border-radius:999px;
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);
+}
+
+/* ---------- Modal ---------- */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(4,6,16,0.72);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:10000;padding:20px;
+}
+.modal-overlay.open{display:flex}
+.modal-box{
+  width:100%;max-width:520px;max-height:90vh;overflow-y:auto;
+  background:#0c0f1e;border:1px solid var(--border-strong);border-radius:var(--radius-lg);
+  padding:26px;box-shadow:0 24px 60px rgba(0,0,0,0.55);
+  animation:modalIn .2s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.modal-title{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:#fff}
+.modal-close{background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer;line-height:1;padding:4px}
+.modal-close:hover{color:#fff}
+.modal-sub{color:var(--text-dim);font-size:0.83rem;margin-bottom:18px;line-height:1.5}
+.dropzone{
+  border:1.5px dashed var(--border-strong);border-radius:var(--radius);padding:32px 18px;
+  text-align:center;cursor:pointer;transition:border-color .15s ease, background .15s ease;
+  background:rgba(255,255,255,0.02);
+}
+.dropzone.drag{border-color:var(--accent);background:rgba(139,92,246,0.08)}
+.dropzone .icon{font-size:1.8rem;margin-bottom:8px}
+.dropzone .dz-title{font-weight:700;font-size:0.9rem;color:var(--text)}
+.dropzone .dz-sub{font-size:0.76rem;color:var(--text-faint);margin-top:4px}
+.upload-filelist{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+.upload-file-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 12px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid var(--border);
+  font-size:0.78rem;color:var(--text-dim);
+}
+.upload-file-row .name{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.btn-ghost{padding:9px 18px;border-radius:var(--radius-sm);background:transparent;border:1px solid var(--border-strong);color:var(--text-dim);font-weight:600;font-size:0.82rem;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-ghost:hover{color:#fff;border-color:var(--border-strong)}
+.upload-progress{margin-top:16px;display:none}
+.upload-progress .bar-track{height:6px;border-radius:6px;background:rgba(255,255,255,0.08);overflow:hidden}
+.upload-progress .bar-fill{height:100%;width:30%;background:var(--gradient);animation:barslide 1.1s ease-in-out infinite}
+@keyframes barslide{0%{transform:translateX(-100%)}100%{transform:translateX(330%)}}
+.upload-progress .label{font-size:0.76rem;color:var(--text-dim);margin-top:8px}
+.upload-result{margin-top:16px;font-size:0.8rem;line-height:1.6}
+.upload-result .row-ok{color:var(--success)}
+.upload-result .row-err{color:var(--danger)}
+.confirm-input{
+  width:100%;margin-top:14px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:rgba(255,255,255,0.03);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;letter-spacing:1px;
+}
+.confirm-input:focus{outline:none;border-color:var(--danger);box-shadow:0 0 0 3px rgba(248,113,113,0.2)}
+.btn-danger-solid{
+  padding:9px 20px;border-radius:var(--radius-sm);background:linear-gradient(135deg,#f87171,#ef4444);
+  color:#fff;border:none;font-weight:700;font-size:0.82rem;cursor:pointer;font-family:'Inter',sans-serif;
+  opacity:0.4;pointer-events:none;transition:opacity .15s ease;
+}
+.btn-danger-solid.ready{opacity:1;pointer-events:auto}
+
+/* ---------- Empty state ---------- */
+.empty-state{
+  text-align:center;padding:70px 24px;background:var(--glass);border:1px solid var(--border);
+  border-radius:var(--radius-lg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.empty-state .icon{font-size:2.6rem;margin-bottom:14px}
+.empty-state h2{font-family:'Sora',sans-serif;font-size:1.3rem;color:#fff;margin-bottom:8px}
+.empty-state p{color:var(--text-dim);font-size:0.88rem;max-width:440px;margin:0 auto 22px}
 </style>
 </head>
 <body>
@@ -233,7 +317,65 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
       <div class="brand-sub">Client Issues Intelligence Dashboard</div>
     </div>
   </div>
-  <div class="topbar-meta"><span class="dot"></span>Last synced &mdash; {{ now }}</div>
+  <div class="topbar-actions">
+    <span class="data-pill">{{ data_info.counts.tickets }} tickets &middot; {{ data_info.counts.projects }} projects</span>
+    <div class="topbar-meta"><span class="dot"></span>Last synced &mdash; {{ now }}</div>
+    <button type="button" class="btn-pill primary" onclick="openUploadModal()">&#8593; Upload Data</button>
+    <button type="button" class="btn-pill danger" onclick="openRestartModal()">&#8635; Reset Database</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Upload Tickets</div>
+      <button type="button" class="modal-close" onclick="closeUploadModal()">&times;</button>
+    </div>
+    <div class="modal-sub">
+      Drop a <strong>.csv</strong> or <strong>.xlsx</strong> file. Existing tickets are matched by
+      <strong>Client + Ticket No</strong> &mdash; matches get updated in place, everything else is
+      added as new. Nothing is ever deleted.
+    </div>
+    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+      <div class="icon">&#128193;</div>
+      <div class="dz-title">Click to browse or drag a file here</div>
+      <div class="dz-sub">.csv, .xlsx, .xls &middot; up to 25&nbsp;MB</div>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple style="display:none">
+    </div>
+    <div class="control-group" id="csvClientGroup" style="display:none;margin-top:14px">
+      <label>Client name (for CSV files without a "Client" column)</label>
+      <input type="text" id="csvClientName" placeholder="e.g. MPOB" style="min-width:100%">
+    </div>
+    <div class="upload-filelist" id="uploadFileList"></div>
+    <div class="upload-progress" id="uploadProgress">
+      <div class="bar-track"><div class="bar-fill"></div></div>
+      <div class="label">Uploading &amp; merging into the database&hellip;</div>
+    </div>
+    <div class="upload-result" id="uploadResult"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeUploadModal()">Close</button>
+      <button type="button" class="btn-filter" id="uploadSubmitBtn" onclick="doUpload()" disabled>Upload</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="restartModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Reset Database</div>
+      <button type="button" class="modal-close" onclick="closeRestartModal()">&times;</button>
+    </div>
+    <div class="modal-sub">
+      This permanently <strong>deletes every ticket and project record</strong> from the database.
+      The dashboard will go back to an empty state until you upload new data. This cannot be undone.
+    </div>
+    <label style="font-size:0.72rem;color:var(--text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px">Type RESET to confirm</label>
+    <input type="text" class="confirm-input" id="restartConfirmInput" placeholder="RESET" oninput="onRestartInput()">
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeRestartModal()">Cancel</button>
+      <button type="button" class="btn-danger-solid" id="restartConfirmBtn" onclick="doRestart()">Delete Everything</button>
+    </div>
+  </div>
 </div>
 
 <form method="GET" action="/" class="controls" id="filters">
@@ -309,15 +451,13 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 <details class="debug-box">
   <summary>Debug Info</summary>
   <div class="content">
-    <p><strong>Data directory:</strong> <code>D:\Work\Opencode analysis</code></p>
-    <p><strong>Excel files found:</strong> {{ data_info.excel_files|length }}</p>
-    {% for f in data_info.excel_files %}
-    <p>&nbsp;&nbsp;- <code>{{ f }}</code></p>
-    {% endfor %}
-    <p><strong>DataFrame shape:</strong> <code>({{ data_info.total_raw }}, {{ data_info.columns|length }})</code></p>
+    <p><strong>Data source:</strong> <code>Neon Postgres</code></p>
+    <p><strong>Tickets in DB:</strong> <code>{{ data_info.counts.tickets }}</code> &middot; <strong>Projects in DB:</strong> <code>{{ data_info.counts.projects }}</code></p>
+    <p><strong>Last updated:</strong> <code>{{ data_info.counts.last_updated or 'n/a' }}</code></p>
+    <p><strong>DataFrame shape (after filters):</strong> <code>({{ data_info.total_filtered }}, {{ data_info.columns|length }})</code></p>
     <p><strong>Columns:</strong> <code>{{ data_info.columns }}</code></p>
     {% if data_info.source_files %}
-    <p><strong>Sources:</strong> <code>{{ data_info.source_files }}</code></p>
+    <p><strong>Uploaded from:</strong> <code>{{ data_info.source_files }}</code></p>
     {% endif %}
     {% if data_info.load_errors %}
     <p style="color:var(--danger)"><strong>Load Errors:</strong></p>
@@ -329,11 +469,19 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 </details>
 
 {% if not has_data %}
-<div class="alert alert-warning">No data found. Make sure the Excel file is in the correct location.</div>
-<div class="alert alert-info">Searching for <code>.xlsx</code> files in: <code>D:\Work\Opencode analysis</code></div>
-{% if data_info.excel_files|length == 0 %}
-<div class="alert alert-warning">No Excel files found in this directory.</div>
-{% endif %}
+<div class="empty-state">
+  <div class="icon">&#128202;</div>
+  <h2>No data yet</h2>
+  <p>
+    {% if data_info.load_errors %}
+      Couldn't reach the database: <code>{{ data_info.load_errors[0] }}</code>
+    {% else %}
+      The database is empty. Upload a client tickets Excel workbook (one sheet per client) or a CSV
+      file to populate the dashboard.
+    {% endif %}
+  </p>
+  <button type="button" class="btn-pill primary" onclick="openUploadModal()">&#8593; Upload Data</button>
+</div>
 {% else %}
 
 <div class="tabs" id="tabs">
@@ -1020,6 +1168,138 @@ function saveChanges8() {
 function cancelEdit8() {
   var btn = document.getElementById('editBtn8');
   if (btn.textContent === 'Exit Edit Mode') toggleEdit8();
+}
+
+/* ---------- Upload modal ---------- */
+var selectedFiles = [];
+
+function openUploadModal() {
+  document.getElementById('uploadModal').classList.add('open');
+}
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.remove('open');
+  selectedFiles = [];
+  document.getElementById('fileInput').value = '';
+  renderFileList();
+  document.getElementById('uploadResult').innerHTML = '';
+  document.getElementById('uploadProgress').style.display = 'none';
+}
+
+function renderFileList() {
+  var list = document.getElementById('uploadFileList');
+  var hasCsv = selectedFiles.some(function(f) { return f.name.toLowerCase().endsWith('.csv'); });
+  document.getElementById('csvClientGroup').style.display = hasCsv ? 'flex' : 'none';
+  document.getElementById('uploadSubmitBtn').disabled = selectedFiles.length === 0;
+  if (selectedFiles.length === 0) { list.innerHTML = ''; return; }
+  list.innerHTML = selectedFiles.map(function(f, i) {
+    var kb = (f.size / 1024).toFixed(0);
+    return '<div class="upload-file-row"><span class="name">' + escapeHtml(f.name) + '</span>' +
+      '<span>' + kb + ' KB <a href="javascript:void(0)" onclick="removeFile(' + i + ')" style="color:var(--danger);margin-left:8px">remove</a></span></div>';
+  }).join('');
+}
+
+function removeFile(i) {
+  selectedFiles.splice(i, 1);
+  renderFileList();
+}
+
+var dropzone = document.getElementById('dropzone');
+var fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', function() {
+  selectedFiles = selectedFiles.concat(Array.from(fileInput.files));
+  renderFileList();
+});
+['dragenter', 'dragover'].forEach(function(evt) {
+  dropzone.addEventListener(evt, function(e) {
+    e.preventDefault(); e.stopPropagation();
+    dropzone.classList.add('drag');
+  });
+});
+['dragleave', 'drop'].forEach(function(evt) {
+  dropzone.addEventListener(evt, function(e) {
+    e.preventDefault(); e.stopPropagation();
+    dropzone.classList.remove('drag');
+  });
+});
+dropzone.addEventListener('drop', function(e) {
+  var dropped = Array.from(e.dataTransfer.files || []);
+  selectedFiles = selectedFiles.concat(dropped);
+  renderFileList();
+});
+
+function doUpload() {
+  if (selectedFiles.length === 0) return;
+  var fd = new FormData();
+  selectedFiles.forEach(function(f) { fd.append('file', f); });
+  var clientName = document.getElementById('csvClientName').value.trim();
+  if (clientName) fd.append('client', clientName);
+
+  document.getElementById('uploadSubmitBtn').disabled = true;
+  document.getElementById('uploadProgress').style.display = 'block';
+  document.getElementById('uploadResult').innerHTML = '';
+
+  fetch('/api/upload', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+      document.getElementById('uploadProgress').style.display = 'none';
+      var html = '';
+      if (result.success || result.tickets_inserted || result.tickets_updated || result.projects_inserted || result.projects_updated) {
+        html += '<div class="row-ok">&#10003; ' + result.tickets_inserted + ' new ticket(s), ' + result.tickets_updated + ' updated';
+        if (result.projects_inserted || result.projects_updated) {
+          html += ' &middot; ' + result.projects_inserted + ' new project row(s), ' + result.projects_updated + ' updated';
+        }
+        html += '</div>';
+      }
+      if (result.errors && result.errors.length) {
+        result.errors.forEach(function(err) { html += '<div class="row-err">&#10007; ' + escapeHtml(err) + '</div>'; });
+      }
+      document.getElementById('uploadResult').innerHTML = html;
+      document.getElementById('uploadSubmitBtn').disabled = false;
+      if (result.success) {
+        showToast('Upload complete', 'success');
+        setTimeout(function() { window.location.reload(); }, 1400);
+      } else {
+        showToast('Upload finished with errors', 'error');
+      }
+    })
+    .catch(function(e) {
+      document.getElementById('uploadProgress').style.display = 'none';
+      document.getElementById('uploadResult').innerHTML = '<div class="row-err">Upload failed: ' + escapeHtml(e.message) + '</div>';
+      document.getElementById('uploadSubmitBtn').disabled = false;
+    });
+}
+
+/* ---------- Restart modal ---------- */
+function openRestartModal() {
+  document.getElementById('restartModal').classList.add('open');
+  document.getElementById('restartConfirmInput').value = '';
+  document.getElementById('restartConfirmBtn').classList.remove('ready');
+}
+function closeRestartModal() {
+  document.getElementById('restartModal').classList.remove('open');
+}
+function onRestartInput() {
+  var ok = document.getElementById('restartConfirmInput').value.trim() === 'RESET';
+  document.getElementById('restartConfirmBtn').classList.toggle('ready', ok);
+}
+function doRestart() {
+  if (!document.getElementById('restartConfirmBtn').classList.contains('ready')) return;
+  document.getElementById('restartConfirmBtn').textContent = 'Deleting…';
+  fetch('/api/restart', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+      if (result.success) {
+        showToast('Database reset', 'success');
+        setTimeout(function() { window.location.reload(); }, 800);
+      } else {
+        showToast('Reset failed: ' + (result.error || 'unknown'), 'error');
+        document.getElementById('restartConfirmBtn').textContent = 'Delete Everything';
+      }
+    })
+    .catch(function(e) {
+      showToast('Reset failed: ' + e.message, 'error');
+      document.getElementById('restartConfirmBtn').textContent = 'Delete Everything';
+    });
 }
 </script>
 </body>

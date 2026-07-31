@@ -275,6 +275,18 @@ def parse_project_sheet(df, source_file):
         df["Client"] = df["Client"].ffill()
     df["Source File"] = source_file
 
+    # A project's Title only appears on its first row in the sheet;
+    # the sub-item/checklist rows underneath it (e.g. a "Pre UAT"
+    # breakdown split across several rows) leave Title blank, same as a
+    # merged cell. Without carrying it down, those rows all collapse to
+    # Title=NULL -- so two *different* LKTN projects (say "Claim" and
+    # "Asset") that happen to share the same boilerplate checklist text
+    # ("Sign-off - 18/06-21/06") become indistinguishable from each
+    # other. Filling forward per Client (never across a client
+    # boundary) keeps each sub-item attached to its real parent project.
+    if "Title" in df.columns and "Client" in df.columns:
+        df["Title"] = df.groupby("Client")["Title"].ffill()
+
     if "Tempoh" in df.columns:
         df["Duration"] = df["Tempoh"].astype(str)
         df.loc[df["Tempoh"].isna(), "Duration"] = None
@@ -282,6 +294,14 @@ def parse_project_sheet(df, source_file):
     for c in ["Start date", "Due date", "Target Date"]:
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
+
+    # Pure spacer/padding rows (blank row height filler between
+    # sections) survive dropna(how="all") because Client -- and now
+    # Title too -- carry a value onto them, but they contribute nothing
+    # real. Drop anything with no actual content in any of these.
+    content_cols = [c for c in ["Description", "Category", "Start date", "Due date", "Status Progress", "Percentage", "Overall Progress Task (%)"] if c in df.columns]
+    if content_cols:
+        df = df[df[content_cols].notna().any(axis=1)]
 
     # SQL's NULL is never equal to NULL, even inside a UNIQUE constraint --
     # so rows with a blank title/date (common for sub-item description

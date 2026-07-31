@@ -173,7 +173,10 @@ def convert_dtypes(df):
         if isinstance(sla, pd.DataFrame):
             sla = sla.iloc[:, 0]
         df["SLA Late"] = sla.astype(str).str.strip()
-        df["SLA Breach"] = df["SLA Late"].apply(lambda x: x.lower() in ("yes", "1", "true", "late", "y") if pd.notna(x) else False)
+        # SLA Late holds a numeric days-remaining value; negative means
+        # the ticket blew past its deadline.
+        sla_num = pd.to_numeric(df["SLA Late"].replace({"nan": None}), errors="coerce")
+        df["SLA Breach"] = sla_num < 0
     else:
         df["SLA Breach"] = False
 

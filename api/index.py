@@ -47,71 +47,17 @@ def pwa_manifest():
     return send_from_directory(PROJECT_ROOT, "manifest.json", mimetype="application/manifest+json")
 
 
-    if "Priority" in df.columns:
-        pr = df["Priority"]
-        if isinstance(pr, pd.DataFrame):
-            pr = pr.iloc[:, 0]
-        df["Priority"] = pr.astype(str).str.strip().str.title()
-        df["Priority"] = df["Priority"].replace({"Nan": None, "None": None})
+@app.route("/sw.js")
+def pwa_service_worker():
+    # Served from the root path (not /static/sw.js) so its default scope
+    # covers the whole origin instead of just /static/.
+    return send_from_directory(PROJECT_ROOT, "sw.js", mimetype="application/javascript")
 
-    if "Ticket Created Date" in df.columns and "Ticket Closed Date" in df.columns:
-        mask = df["Ticket Created Date"].notna() & df["Ticket Closed Date"].notna()
-        df.loc[mask, "Days to Close"] = (df.loc[mask, "Ticket Closed Date"] - df.loc[mask, "Ticket Created Date"]).dt.days
-    elif "Ticket Created Date" in df.columns and "Ticket Completed Date" in df.columns:
-        mask = df["Ticket Created Date"].notna() & df["Ticket Completed Date"].notna()
-        df.loc[mask, "Days to Close"] = (df.loc[mask, "Ticket Completed Date"] - df.loc[mask, "Ticket Created Date"]).dt.days
 
-    if "Days" in df.columns:
-        df["Days"] = pd.to_numeric(df["Days"], errors="coerce")
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory(os.path.join(PROJECT_ROOT, "static"), filename)
 
-    if "Ageing" in df.columns:
-        df["Ageing"] = df["Ageing"].astype(str).str.strip().replace({
-            "1-30 days": "1-30 Days",
-            "1-30 Days": "1-30 Days",
-            "30-60 Days": "31-60 Days",
-            "30-60 days": "31-60 Days",
-            "31-60 Days": "31-60 Days",
-            "31-60 days": "31-60 Days",
-            ">60 Days": "> 60 Days",
-            ">60 days": "> 60 Days",
-            "> 60 Days": "> 60 Days",
-            "> 60 days": "> 60 Days",
-            "nan": None,
-        })
-    if "Ageing" not in df.columns:
-        if "Days" in df.columns:
-            def classify(d):
-                if pd.isna(d):
-                    return None
-                if d <= 30:
-                    return "1-30 Days"
-                elif d <= 60:
-                    return "31-60 Days"
-                else:
-                    return "> 60 Days"
-            df["Ageing"] = df["Days"].apply(classify)
-        elif "Ticket Created Date" in df.columns:
-            days_open = (pd.Timestamp.now() - df["Ticket Created Date"]).dt.days
-            def classify2(d):
-                if pd.isna(d):
-                    return None
-                if d <= 30:
-                    return "1-30 Days"
-                elif d <= 60:
-                    return "31-60 Days"
-                else:
-                    return "> 60 Days"
-            df["Ageing"] = days_open.apply(classify2)
-
-    if "SLA Late" in df.columns:
-        sla = df["SLA Late"]
-        if isinstance(sla, pd.DataFrame):
-            sla = sla.iloc[:, 0]
-        df["SLA Late"] = sla.astype(str).str.strip()
-        sla_num = pd.to_numeric(df["SLA Late"].replace({"nan": None}), errors="coerce")
-        df["SLA Breach"] = sla_num < 0
-    else:
-        df["SLA Breach"] = False
 
 def log(msg, level="INFO"):
     print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {level} {msg}", flush=True)
@@ -639,7 +585,7 @@ def build_sla_charts(df):
 
     exclude_clients = ["Client Warranty", "KUIPS"]
     if "Client" in df.columns:
-        df = df[~df["Client"].isin(exclude_clients)]
+        df = df[~df["Client"].isin(exclude_clients)].copy()
 
     total = len(df)
     breaches = df["SLA Breach"].sum()
@@ -685,8 +631,8 @@ def build_sla_charts(df):
                 "Pending": "Pending + In Progress",
                 "In Progress": "Pending + In Progress",
             }
-            df["_SLA Status Group"] = df["Ticket Status"].replace(status_map)
-            sla_pivot = df.groupby(["Client", "_SLA Status Group"])["SLA Breach"].agg(["sum", "count", "mean"]).reset_index()
+            status_group = df["Ticket Status"].replace(status_map)
+            sla_pivot = df.groupby(["Client", status_group])["SLA Breach"].agg(["sum", "count", "mean"]).reset_index()
             sla_pivot.columns = ["Client", "Status", "Pelanggaran", "Jumlah", "Kadar Pelanggaran"]
             sla_pivot["Kadar Pelanggaran"] = (sla_pivot["Kadar Pelanggaran"] * 100).round(1)
 
@@ -695,7 +641,7 @@ def build_sla_charts(df):
                 age_valid = df["Ageing"].astype(str).str.strip()
                 age_valid = age_valid.ne("") & age_valid.str.lower().ne("nan") & age_valid.ne("Not Due")
 
-                open_counts = df[(df["Ticket Status"].isin(["Pending", "In Progress"])) & sla_valid & age_valid].groupby("Client").size()
+                open_counts = df[df["Ticket Status"].isin(["Pending", "In Progress"]) & sla_valid & age_valid].groupby("Client").size()
                 sla_pivot["Open (SLA+Ageing)"] = sla_pivot.apply(
                     lambda r: int(open_counts.get(r["Client"], 0)) if r["Status"] == "Pending + In Progress" else "",
                     axis=1,

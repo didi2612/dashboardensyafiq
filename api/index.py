@@ -550,41 +550,6 @@ def build_charts(df):
     return charts
 
 
-def build_status_charts(df):
-    charts = {}
-
-    if "Ticket Status" not in df.columns:
-        return charts
-
-    status_by_client = df.groupby(["Client", "Ticket Status"]).size().reset_index(name="Bilangan")
-    unique_statuses = status_by_client["Ticket Status"].unique()
-    status_colors_seq = px.colors.qualitative.Plotly[:len(unique_statuses)]
-    fig = px.bar(
-        status_by_client, x="Client", y="Bilangan",
-        color="Ticket Status", title="Status by Client",
-        color_discrete_sequence=status_colors_seq, barmode="stack",
-    )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), xaxis_tickangle=-45)
-    charts["status_client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
-
-    status_counts = df["Ticket Status"].value_counts().reset_index()
-    status_counts.columns = ["Status", "Bilangan"]
-    statuses2 = status_counts["Status"].unique()
-    colors2 = px.colors.qualitative.Plotly[:len(statuses2)]
-    fig = px.bar(
-        status_counts, x="Bilangan", y="Status",
-        orientation="h", title="Count by Status",
-        color="Status", color_discrete_sequence=colors2, text="Bilangan",
-    )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
-    charts["status_hbar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
-
-    pivot = df.groupby(["Client", "Ticket Status"]).size().unstack(fill_value=0)
-    charts["status_pivot"] = pivot.to_html()
-
-    return charts
-
-
 def build_priority_charts(df):
     charts = {}
 
@@ -705,21 +670,52 @@ def build_client_comparison_charts(df):
 
     charts["client_stats_table"] = client_stats.to_html(index=False)
 
+    exclude_clients = ["Client Warranty", "KUIPS"]
+    chart_clients = client_stats[~client_stats["Client"].isin(exclude_clients)]
+
+    # Count by Status (filtered)
+    df_filtered = df[~df["Client"].isin(exclude_clients)]
+    if "Ticket Status" in df_filtered.columns:
+        status_counts = df_filtered["Ticket Status"].value_counts().reset_index()
+        status_counts.columns = ["Status", "Bilangan"]
+        fig = px.bar(
+            status_counts, x="Bilangan", y="Status",
+            orientation="h", title="Count by Status",
+            color="Status", color_discrete_sequence=px.colors.qualitative.Plotly[:len(status_counts)],
+            text="Bilangan",
+        )
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        charts["count_by_status"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
+
+    # Status pivot table (filtered)
+    if "Ticket Status" in df_filtered.columns:
+        pivot = df_filtered.groupby(["Client", "Ticket Status"]).size().unstack(fill_value=0)
+        pivot["Total"] = pivot.sum(axis=1)
+        pivot.loc["Total"] = pivot.sum()
+        pivot = pivot.astype(int)
+        charts["status_pivot"] = pivot.to_html()
+
     fig = px.bar(
-        client_stats, x="Client", y="Jumlah",
+        chart_clients, x="Client", y="Jumlah",
         title="Total Tickets by Client", color="Client", text="Jumlah",
     )
     fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False, xaxis_tickangle=-45)
     charts["client_total_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
-    status_cols = [c for c in ["Completed", "Pending", "In Progress", "Closed"] if c in client_stats.columns]
+    status_order = ["Pending", "In Progress", "Completed", "Closed"]
+    status_cols = [c for c in status_order if c in chart_clients.columns]
     if status_cols:
         fig = go.Figure()
-        palette = px.colors.qualitative.Plotly
-        for i, col in enumerate(status_cols):
-            fig.add_trace(go.Bar(name=col, x=client_stats["Client"], y=client_stats[col], marker_color=palette[i % len(palette)]))
-        fig.update_layout(barmode="stack", title="Status by Client", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), xaxis_tickangle=-45)
-        charts["client_status_stacked"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
+        for col in status_cols:
+            color = COLORS.get(col, "#95a5a6")
+            fig.add_trace(go.Bar(name=col, x=chart_clients["Client"], y=chart_clients[col], marker_color=color, text=chart_clients[col], textposition="outside", textfont=dict(color="#c7cbe0", size=10)))
+        fig.update_layout(
+            barmode="group", title="Status by Client",
+            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#c7cbe0"), xaxis_tickangle=-45,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        )
+        charts["status_by_client"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Priority" in df.columns:
         priority_dummies = pd.get_dummies(df[["Client", "Priority"]], columns=["Priority"])
@@ -893,7 +889,6 @@ def index():
 
     if has_data:
         overview_charts = build_charts(df_filtered)
-        status_charts = build_status_charts(df_filtered)
         priority_charts = build_priority_charts(df_filtered)
         ageing_charts = build_ageing_charts(df_filtered)
         comparison_charts = build_client_comparison_charts(df_filtered)
@@ -902,7 +897,7 @@ def index():
         warranty_charts = build_warranty_charts(df_filtered)
         project_charts = build_project_charts(project_df)
     else:
-        overview_charts = status_charts = priority_charts = ageing_charts = {}
+        overview_charts = priority_charts = ageing_charts = {}
         comparison_charts = timeline_charts = sla_charts = {}
         warranty_charts = project_charts = {}
 
@@ -961,7 +956,6 @@ def index():
         data_info=data_info,
         filter_options=filter_options,
         overview_charts=overview_charts,
-        status_charts=status_charts,
         priority_charts=priority_charts,
         ageing_charts=ageing_charts,
         comparison_charts=comparison_charts,

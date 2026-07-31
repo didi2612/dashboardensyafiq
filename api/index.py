@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, g
 
 load_dotenv()
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env.local"), override=True)
@@ -56,23 +56,70 @@ TICKET_DB_COL_BY_DISPLAY = {display: col for display, col in db.TICKET_DB_COLUMN
 _schema_ready = False
 
 
+def request_conn():
+    """One psycopg2 connection per Flask request, reused by every db.*
+    call in that request instead of each opening its own. A fresh Neon
+    connect costs real round-trip time, and a single page load needs
+    4+ separate queries, so this is what actually made pages fast --
+    the indexes only help once the connection overhead isn't dominating.
+    """
+    if "db_conn" not in g:
+        g.db_conn = db.get_conn()
+    return g.db_conn
+
+
+@app.teardown_appcontext
+def close_request_conn(exception):
+    conn = g.pop("db_conn", None)
+    if conn is None:
+        return
+    try:
+        if exception is None:
+            conn.commit()
+        else:
+            conn.rollback()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
 def ensure_schema():
     global _schema_ready
     if _schema_ready:
         return
-    db.init_schema()
+    db.init_schema(conn=request_conn())
     _schema_ready = True
 
 
-def load_data():
+def parse_filters(args):
+    filters = {
+        "clients": args.getlist("client"),
+        "priorities": args.getlist("priority"),
+        "statuses": args.getlist("status"),
+        "task_types": args.getlist("task_type"),
+        "search": args.get("search") or None,
+    }
+    for key, param in (("date_start", "date_start"), ("date_end", "date_end")):
+        raw = args.get(param)
+        if raw:
+            try:
+                datetime.strptime(raw, "%Y-%m-%d")
+                filters[key] = raw
+            except ValueError:
+                pass
+    return filters
+
+
+def load_data(filters=None):
     ensure_schema()
-    df = db.fetch_tickets_df()
+    df = db.fetch_tickets_df(filters, conn=request_conn())
     return df, []
 
 
 def load_project_data():
     ensure_schema()
-    return db.fetch_projects_df()
+    return db.fetch_projects_df(conn=request_conn())
 
 
 def build_warranty_charts(df):
@@ -210,56 +257,6 @@ def build_project_charts(df):
     charts["detail_data"] = detail.to_dict("records")
 
     return charts
-
-
-def apply_filters(df, args):
-    if "Ticket Created Date" in df.columns:
-        valid_dates = df["Ticket Created Date"].dropna()
-        if len(valid_dates) > 0:
-            start_str = args.get("date_start")
-            end_str = args.get("date_end")
-            if start_str:
-                try:
-                    start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
-                    df = df[df["Ticket Created Date"].dt.date >= start_date]
-                except Exception:
-                    pass
-            if end_str:
-                try:
-                    end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
-                    df = df[df["Ticket Created Date"].dt.date <= end_date]
-                except Exception:
-                    pass
-
-    if "Client" in df.columns:
-        selected = args.getlist("client")
-        if selected:
-            df = df[df["Client"].isin(selected)]
-
-    if "Priority" in df.columns:
-        selected = args.getlist("priority")
-        if selected:
-            df = df[df["Priority"].isin(selected)]
-
-    if "Ticket Status" in df.columns:
-        selected = args.getlist("status")
-        if selected:
-            df = df[df["Ticket Status"].isin(selected)]
-
-    if "Task Type" in df.columns:
-        selected = args.getlist("task_type")
-        if selected:
-            df = df[df["Task Type"].isin(selected)]
-
-    search_term = args.get("search", "")
-    if search_term:
-        mask = pd.Series(False, index=df.index)
-        for col in ["Ticket Detail", "Ticket Title", "Ticket No", "Ticket Category", "Company", "Project"]:
-            if col in df.columns:
-                mask = mask | df[col].astype(str).str.contains(search_term, case=False, na=False)
-        df = df[mask]
-
-    return df
 
 
 def build_charts(df):
@@ -614,52 +611,37 @@ def build_sla_charts(df):
     return charts
 
 
-def get_filter_options(df):
-    options = {}
-    if "Client" in df.columns:
-        options["clients"] = sorted(df["Client"].unique())
-    if "Priority" in df.columns:
-        options["priorities"] = sorted(df["Priority"].dropna().unique())
-    if "Ticket Status" in df.columns:
-        options["statuses"] = sorted(df["Ticket Status"].dropna().unique())
-    if "Task Type" in df.columns:
-        options["task_types"] = sorted(df["Task Type"].dropna().unique())
-    if "Ticket Created Date" in df.columns:
-        valid_dates = df["Ticket Created Date"].dropna()
-        if len(valid_dates) > 0:
-            options["min_date"] = valid_dates.min().strftime("%Y-%m-%d")
-            options["max_date"] = valid_dates.max().strftime("%Y-%m-%d")
-    return options
-
-
 @app.route("/")
 def index():
+    filters = parse_filters(request.args)
     try:
-        df, load_errors = load_data()
+        df, load_errors = load_data(filters)
     except Exception as e:
         log(f"DB error loading tickets: {e}", "ERROR")
         df, load_errors = pd.DataFrame(), [str(e)]
 
-    df_filtered = apply_filters(df, request.args) if not df.empty else df
-
-    filter_options = get_filter_options(df)
+    try:
+        filter_options = db.get_filter_metadata(conn=request_conn())
+    except Exception as e:
+        log(f"DB error loading filter metadata: {e}", "ERROR")
+        filter_options = {}
     filter_options["search"] = request.args.get("search", "")
     filter_options["date_start"] = request.args.get("date_start", "")
     filter_options["date_end"] = request.args.get("date_end", "")
-    filter_options["selected_clients"] = request.args.getlist("client")
-    filter_options["selected_priorities"] = request.args.getlist("priority")
-    filter_options["selected_statuses"] = request.args.getlist("status")
-    filter_options["selected_task_types"] = request.args.getlist("task_type")
+    filter_options["selected_clients"] = filters["clients"]
+    filter_options["selected_priorities"] = filters["priorities"]
+    filter_options["selected_statuses"] = filters["statuses"]
+    filter_options["selected_task_types"] = filters["task_types"]
 
-    has_data = not df_filtered.empty
+    has_data = not df.empty
     try:
-        counts = db.get_counts()
+        counts = db.get_counts(conn=request_conn())
     except Exception:
         counts = {"tickets": len(df), "projects": 0, "last_updated": None}
 
     data_info = {
-        "total_raw": len(df),
-        "total_filtered": len(df_filtered),
+        "total_raw": counts.get("tickets", len(df)),
+        "total_filtered": len(df),
         "load_errors": load_errors,
         "columns": list(df.columns) if not df.empty else [],
         "counts": counts,
@@ -673,13 +655,13 @@ def index():
     has_project = not project_df.empty
 
     if has_data:
-        overview_charts = build_charts(df_filtered)
-        priority_charts = build_priority_charts(df_filtered)
-        ageing_charts = build_ageing_charts(df_filtered)
-        comparison_charts = build_client_comparison_charts(df_filtered)
-        timeline_charts = build_timeline_charts(df_filtered)
-        sla_charts = build_sla_charts(df_filtered)
-        warranty_charts = build_warranty_charts(df_filtered)
+        overview_charts = build_charts(df)
+        priority_charts = build_priority_charts(df)
+        ageing_charts = build_ageing_charts(df)
+        comparison_charts = build_client_comparison_charts(df)
+        timeline_charts = build_timeline_charts(df)
+        sla_charts = build_sla_charts(df)
+        warranty_charts = build_warranty_charts(df)
         project_charts = build_project_charts(project_df)
     else:
         overview_charts = priority_charts = ageing_charts = {}
@@ -692,10 +674,10 @@ def index():
         "Ticket Created Date", "Ticket Completed Date", "Ticket Closed Date",
         "Days to Close", "Ageing", "SLA Breach",
     ]
-    avail_cols = [c for c in display_cols if c in df_filtered.columns]
+    avail_cols = [c for c in display_cols if c in df.columns]
     meta_cols = ["_row_idx", "Source File"]
-    detail_cols = avail_cols + [c for c in meta_cols if c in df_filtered.columns]
-    detail_df = df_filtered[detail_cols].copy() if has_data and detail_cols else pd.DataFrame()
+    detail_cols = avail_cols + [c for c in meta_cols if c in df.columns]
+    detail_df = df[detail_cols].copy() if has_data and detail_cols else pd.DataFrame()
 
     if "Ticket Created Date" in detail_df.columns:
         detail_df["Ticket Created Date"] = detail_df["Ticket Created Date"].dt.strftime("%d/%m/%Y")
@@ -711,10 +693,10 @@ def index():
         detail_by_client.setdefault(client, []).append(row)
 
     ageing_list_data = {}
-    if has_data and "Ageing" in df_filtered.columns and df_filtered["Ageing"].notna().sum() > 0:
+    if has_data and "Ageing" in df.columns and df["Ageing"].notna().sum() > 0:
         age_order = ["1-30 Days", "31-60 Days", "> 60 Days"]
-        ageing_cols = [c for c in ["Client", "Ticket No", "Ticket Title", "Ticket Status", "Priority", "Ticket Created Date", "Days", "_row_idx", "Source File"] if c in df_filtered.columns]
-        ageing_df = df_filtered.dropna(subset=["Ageing"]).copy()
+        ageing_cols = [c for c in ["Client", "Ticket No", "Ticket Title", "Ticket Status", "Priority", "Ticket Created Date", "Days", "_row_idx", "Source File"] if c in df.columns]
+        ageing_df = df.dropna(subset=["Ageing"]).copy()
         if "Ticket Created Date" in ageing_df.columns:
             ageing_df["Ticket Created Date"] = ageing_df["Ticket Created Date"].dt.strftime("%d/%m/%Y")
         ageing_list_data = {
@@ -777,7 +759,7 @@ def api_upload():
                 df = pd.read_csv(io.BytesIO(raw))
                 client = form_client or (df["Client"].iloc[0] if "Client" in df.columns and len(df) else os.path.splitext(fname)[0])
                 parsed = parse_ticket_sheet(df, client=client, source_file=fname)
-                ins, upd = db.upsert_tickets(parsed)
+                ins, upd = db.upsert_tickets(parsed, conn=request_conn())
                 summary["tickets_inserted"] += ins
                 summary["tickets_updated"] += upd
                 summary["files"].append({"name": fname, "rows_found": len(parsed)})
@@ -792,7 +774,7 @@ def api_upload():
                     parsed = parse_ticket_sheet(df, client=sheet_name, source_file=fname)
                     if parsed.empty:
                         continue
-                    ins, upd = db.upsert_tickets(parsed)
+                    ins, upd = db.upsert_tickets(parsed, conn=request_conn())
                     summary["tickets_inserted"] += ins
                     summary["tickets_updated"] += upd
                     rows_found += len(parsed)
@@ -804,7 +786,7 @@ def api_upload():
                     pdf = pd.read_excel(buf, sheet_name="Client Project", header=0, engine="openpyxl")
                     parsed_p = parse_project_sheet(pdf, source_file=fname)
                     if not parsed_p.empty:
-                        ins_p, upd_p = db.upsert_projects(parsed_p)
+                        ins_p, upd_p = db.upsert_projects(parsed_p, conn=request_conn())
                         summary["projects_inserted"] += ins_p
                         summary["projects_updated"] += upd_p
 
@@ -825,7 +807,7 @@ def api_upload():
 def api_restart():
     ensure_schema()
     try:
-        db.reset_all()
+        db.reset_all(conn=request_conn())
         return jsonify({"success": True})
     except Exception as e:
         log(f"Restart error: {e}", "ERROR")
@@ -836,7 +818,7 @@ def api_restart():
 def api_status():
     ensure_schema()
     try:
-        return jsonify({"success": True, **db.get_counts()})
+        return jsonify({"success": True, **db.get_counts(conn=request_conn())})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -853,7 +835,7 @@ def api_save():
         return {"success": False, "error": f"Column not editable: {column}"}
 
     try:
-        db.update_ticket_field(int(row_idx), db_column, value)
+        db.update_ticket_field(int(row_idx), db_column, value, conn=request_conn())
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}

@@ -264,7 +264,7 @@ def build_project_charts(df):
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'
             charts["timeline_chart"] = timeline_charts_html
 
-    display_cols_p = ["Client", "Title", "Category", "Progress", "Priority", "Start date", "Due date", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
+    display_cols_p = ["Client", "Title", "Description", "Category", "Progress", "Priority", "Start date", "Due date", "Duration", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]
     avail_p = [c for c in display_cols_p if c in df.columns]
     meta_p = [c for c in ["_row_idx", "_source_file"] if c in df.columns]
     detail = df[avail_p + meta_p].copy()
@@ -841,7 +841,8 @@ def api_upload():
                 if "Client Project" in xl.sheet_names:
                     buf.seek(0)
                     pdf = pd.read_excel(buf, sheet_name="Client Project", header=0, engine="openpyxl")
-                    parsed_p = parse_project_sheet(pdf, source_file=fname)
+                    parsed_p, diag_p = parse_project_sheet(pdf, source_file=fname)
+                    note_diagnostics({"rows_dropped": 0, "unmapped_columns": diag_p["unmapped_columns"]})
                     if not parsed_p.empty:
                         ins_p, upd_p = db.upsert_projects(parsed_p, conn=request_conn())
                         summary["projects_inserted"] += ins_p

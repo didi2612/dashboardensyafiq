@@ -67,7 +67,9 @@ def main():
     xl = pd.ExcelFile(filepath, engine="openpyxl")
     if "Client Project" in xl.sheet_names:
         pdf = pd.read_excel(filepath, sheet_name="Client Project", header=0, engine="openpyxl")
-        parsed_p = parse_project_sheet(pdf, source_file=fname)
+        parsed_p, diag_p = parse_project_sheet(pdf, source_file=fname)
+        if diag_p["unmapped_columns"]:
+            print(f"  Client Project: columns not stored: {diag_p['unmapped_columns']}")
         if not parsed_p.empty:
             ins_p, upd_p = db.upsert_projects(parsed_p)
             print(f"  Client Project: {len(parsed_p)} rows -> {ins_p} inserted, {upd_p} updated")

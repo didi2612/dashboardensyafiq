@@ -42,17 +42,20 @@ TICKET_DB_COLUMNS = [
 PROJECT_DB_COLUMNS = [
     ("Client", "client"),
     ("Title", "title"),
+    ("Description", "description"),
     ("Category", "category"),
     ("Progress", "progress"),
     ("Priority", "priority"),
     ("Start date", "start_date"),
     ("Due date", "due_date"),
     ("Target Date", "target_date"),
+    ("Duration", "duration"),
     ("Assigned to", "assigned_to"),
     ("Status Progress", "status_progress"),
     ("Percentage", "percentage"),
     ("Overall Progress Task (%)", "overall_progress_task"),
     ("Source File", "source_file"),
+    ("Dedup Seq", "dedup_seq"),
 ]
 
 SCHEMA_SQL = """
@@ -87,23 +90,54 @@ CREATE TABLE IF NOT EXISTS projects (
     id SERIAL PRIMARY KEY,
     client TEXT,
     title TEXT,
+    description TEXT,
     category TEXT,
     progress TEXT,
     priority TEXT,
     start_date DATE,
     due_date DATE,
     target_date DATE,
+    duration TEXT,
     assigned_to TEXT,
     status_progress TEXT,
     percentage NUMERIC,
     overall_progress_task NUMERIC,
     source_file TEXT,
+    dedup_seq INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (client, title, start_date)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- (client, ticket_no) and (client, title, start_date) already have a
+-- Columns added after the table already existed in production.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS duration TEXT;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS dedup_seq INTEGER NOT NULL DEFAULT 0;
+
+-- The source "Client Project" sheet has many rows with a blank title
+-- and/or start/due date (sub-item description lines, section
+-- separators). A plain UNIQUE constraint can't dedupe those on
+-- re-upload: SQL NULL is never equal to NULL, even inside a composite
+-- UNIQUE constraint, so a row with *any* NULL in the key columns is
+-- exempt from the uniqueness check entirely and just inserts again
+-- every time, no matter how many extra columns (dedup_seq included)
+-- are added to a plain constraint. Wrapping the nullable columns in
+-- COALESCE turns each NULL into a real, comparable sentinel value, so
+-- this unique INDEX (not a table CONSTRAINT -- Postgres only allows
+-- expressions in an index) is what actually makes ON CONFLICT match.
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_client_title_start_date_key;
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_client_title_start_date_due_date_description_key;
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_client_title_start_date_due_date_descrip_dedup_key;
+DROP INDEX IF EXISTS idx_projects_dedup_key;
+CREATE UNIQUE INDEX idx_projects_dedup_key ON projects (
+    COALESCE(client, ''),
+    COALESCE(title, ''),
+    COALESCE(start_date, DATE '0001-01-01'),
+    COALESCE(due_date, DATE '0001-01-01'),
+    COALESCE(description, ''),
+    dedup_seq
+);
+
+-- (client, ticket_no) and (client, title, start_date, ...) already have a
 -- backing index from the UNIQUE constraints above, which also serves
 -- plain "WHERE client = ..." lookups since client is the leading column.
 -- These cover the other columns the dashboard filters/sorts by, so those
@@ -207,14 +241,23 @@ def upsert_projects(df, conn=None):
 
     records = _records_for_insert(df, PROJECT_DB_COLUMNS)
     db_cols = [c for _, c in PROJECT_DB_COLUMNS]
-    key_cols = ("client", "title", "start_date")
+    key_cols = ("client", "title", "start_date", "due_date", "description", "dedup_seq")
     update_cols = [c for c in db_cols if c not in key_cols]
     set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
 
+    # Must match idx_projects_dedup_key's expressions exactly for
+    # Postgres to recognize it as the ON CONFLICT target.
     sql = f"""
         INSERT INTO projects ({', '.join(db_cols)})
         VALUES %s
-        ON CONFLICT (client, title, start_date) DO UPDATE SET
+        ON CONFLICT (
+            COALESCE(client, ''),
+            COALESCE(title, ''),
+            COALESCE(start_date, DATE '0001-01-01'),
+            COALESCE(due_date, DATE '0001-01-01'),
+            COALESCE(description, ''),
+            dedup_seq
+        ) DO UPDATE SET
             {set_clause},
             updated_at = now()
         RETURNING (xmax = 0) AS inserted

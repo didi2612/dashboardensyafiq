@@ -80,9 +80,10 @@ TICKET_COLUMNS = [
 ]
 
 PROJECT_COLUMNS = [
-    "Client", "Title", "Category", "Progress", "Priority", "Start date",
-    "Due date", "Target Date", "Assigned to", "Status Progress",
-    "Percentage", "Overall Progress Task (%)", "Source File",
+    "Client", "Title", "Description", "Category", "Progress", "Priority",
+    "Start date", "Due date", "Target Date", "Duration", "Assigned to",
+    "Status Progress", "Percentage", "Overall Progress Task (%)", "Source File",
+    "Dedup Seq",
 ]
 
 
@@ -230,25 +231,64 @@ def parse_ticket_sheet(df, client, source_file):
     return df[TICKET_COLUMNS], {"rows_dropped": rows_dropped, "unmapped_columns": unmapped_columns}
 
 
+def _scale_percentage(series):
+    """Excel's native percentage format stores 50% as the float 0.5, not
+    50 -- there's no "%" character to strip, so pd.to_numeric alone leaves
+    it as a 0-1 fraction. Scale fractional values up to the 0-100 range
+    the UI expects; leave anything already >1 (e.g. entered as "80")
+    alone.
+    """
+    numeric = pd.to_numeric(series.astype(str).str.replace("%", ""), errors="coerce")
+    return numeric.apply(lambda v: v * 100 if pd.notna(v) and v <= 1 else v)
+
+
 def parse_project_sheet(df, source_file):
+    """Standardize a raw 'Client Project' sheet.
+
+    Returns (parsed_df, info); info["unmapped_columns"] lists source
+    columns with no matching field (dropped silently before), so a
+    column like a spreadsheet's own "Notes" shows up instead of just
+    disappearing.
+    """
     df = df.dropna(how="all").copy()
     if "Client" in df.columns:
         df["Client"] = df["Client"].ffill()
     df["Source File"] = source_file
 
+    if "Tempoh" in df.columns:
+        df["Duration"] = df["Tempoh"].astype(str)
+        df.loc[df["Tempoh"].isna(), "Duration"] = None
+
     for c in ["Start date", "Due date", "Target Date"]:
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
+
+    # SQL's NULL is never equal to NULL, even inside a UNIQUE constraint --
+    # so rows with a blank title/date (common for sub-item description
+    # lines, e.g. a checklist under a numbered task) never match an
+    # existing row on re-upload no matter how many content columns are
+    # in the key, and just keep multiplying. A per-sheet occurrence
+    # counter (never NULL) fixes that: as long as the sheet's row order
+    # is unchanged between uploads, the same row gets the same sequence
+    # number and updates in place instead of inserting a duplicate.
+    key_basis = df[["Title", "Start date", "Due date", "Description"]] if "Description" in df.columns else df[["Title", "Start date", "Due date"]]
+    df["Dedup Seq"] = key_basis.astype(str).groupby(list(key_basis.columns)).cumcount()
+
     if "Percentage" in df.columns:
-        df["Percentage"] = pd.to_numeric(df["Percentage"].astype(str).str.replace("%", ""), errors="coerce")
+        df["Percentage"] = _scale_percentage(df["Percentage"])
     if "Overall Progress Task (%)" in df.columns:
-        df["Overall Progress Task (%)"] = pd.to_numeric(df["Overall Progress Task (%)"].astype(str).str.replace("%", ""), errors="coerce")
+        df["Overall Progress Task (%)"] = _scale_percentage(df["Overall Progress Task (%)"])
+
+    unmapped_columns = [
+        c for c in df.columns
+        if c not in PROJECT_COLUMNS and c != "Tempoh" and not str(c).startswith("Unnamed")
+    ]
 
     for col in PROJECT_COLUMNS:
         if col not in df.columns:
             df[col] = None
 
-    return df[PROJECT_COLUMNS]
+    return df[PROJECT_COLUMNS], {"unmapped_columns": unmapped_columns}
 
 
 def detect_ticket_sheets(filepath_or_buffer):

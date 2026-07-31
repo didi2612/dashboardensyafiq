@@ -393,7 +393,6 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   transition:opacity .5s ease, visibility .5s ease;
 }
 .splash-screen.splash-fade{opacity:0;visibility:hidden;pointer-events:none}
-.splash-screen.splash-skip{display:none}
 .splash-logo{
   width:88px;height:88px;object-fit:contain;
   animation:splashPulse 1.6s ease-in-out infinite;
@@ -416,15 +415,10 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 <script>
 (function(){
   var splash = document.getElementById('splashScreen');
-  if (sessionStorage.getItem('swSplashShown')) {
-    splash.classList.add('splash-skip');
-    return;
-  }
-  sessionStorage.setItem('swSplashShown', '1');
   setTimeout(function(){
     splash.classList.add('splash-fade');
     setTimeout(function(){ splash.style.display = 'none'; }, 550);
-  }, 1300);
+  }, 2500);
 })();
 </script>
 <div class="container">
@@ -1011,10 +1005,9 @@ function syncFullscreenBtn() {
 document.addEventListener('fullscreenchange', syncFullscreenBtn);
 document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
-/* ---------- Refresh (also brings the splash screen back) ---------- */
+/* ---------- Refresh (the splash screen always plays again on reload) ---------- */
 function refreshWithSplash() {
   try {
-    sessionStorage.removeItem('swSplashShown');
     if (isFullscreen()) {
       sessionStorage.setItem('swWasFullscreen', '1');
     } else {

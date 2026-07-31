@@ -214,21 +214,41 @@ def parse_ticket_sheet(df, client, source_file):
 
     unmapped_columns = [c for c in df.columns if c not in TICKET_COLUMNS]
 
-    rows_dropped = 0
     if "Ticket No" in df.columns:
         tn = df["Ticket No"]
         if isinstance(tn, pd.DataFrame):
             tn = tn.iloc[:, 0]
-        tn = tn.astype(str).str.strip()
-        valid = tn.ne("") & tn.str.lower().ne("nan") & tn.str.lower().ne("none")
-        rows_dropped = int((~valid).sum())
-        df = df[valid]
+    else:
+        tn = pd.Series([None] * len(df), index=df.index)
+
+    # tn.notna() catches every pandas null sentinel (None, NaN, NaT,
+    # pandas.NA) regardless of the column's inferred dtype; the string
+    # checks additionally catch a cell that's literally the text "nan"/
+    # "none". Relying on the string form alone previously let a
+    # not-actually-empty-looking NA slip through on at least one real
+    # upload.
+    tn_str = tn.astype(str).str.strip()
+    valid = tn.notna() & tn_str.ne("") & tn_str.str.lower().ne("nan") & tn_str.str.lower().ne("none")
+    rows_dropped = int((~valid).sum())
+    df = df[valid]
 
     for col in TICKET_COLUMNS:
         if col not in df.columns:
             df[col] = None
 
-    return df[TICKET_COLUMNS], {"rows_dropped": rows_dropped, "unmapped_columns": unmapped_columns}
+    parsed = df[TICKET_COLUMNS]
+
+    # Belt-and-suspenders: tickets.ticket_no is NOT NULL in Postgres, and
+    # a single row violating that fails the *entire* batch insert -- not
+    # just that row -- silently taking every other valid row in the file
+    # down with it. Guarantee nothing null reaches the database no
+    # matter what slipped past the check above.
+    still_null = parsed["Ticket No"].isna()
+    if still_null.any():
+        rows_dropped += int(still_null.sum())
+        parsed = parsed[~still_null]
+
+    return parsed, {"rows_dropped": rows_dropped, "unmapped_columns": unmapped_columns}
 
 
 def _scale_percentage(series):

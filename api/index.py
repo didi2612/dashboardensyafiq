@@ -800,6 +800,44 @@ def api_upload():
                 seen_unmapped.add(col)
                 summary["unmapped_columns"].append(col)
 
+    def upsert_tickets_safely(parsed, label):
+        """Commit each sheet's tickets as its own mini-transaction.
+
+        The whole upload shares one connection (request_conn()) for
+        speed, but that means an uncaught DB error -- e.g. a bad row
+        that slipped past validation -- leaves the connection's
+        transaction poisoned: every later statement on it fails too
+        until rolled back, and a rollback with no earlier commit would
+        also undo every *other* sheet already upserted in this same
+        request. Committing per sheet on success and rolling back only
+        that sheet on failure keeps one bad sheet from taking every
+        other sheet in the file down with it.
+        """
+        conn = request_conn()
+        try:
+            ins, upd = db.upsert_tickets(parsed, conn=conn)
+            conn.commit()
+            summary["tickets_inserted"] += ins
+            summary["tickets_updated"] += upd
+            return True
+        except Exception as e:
+            conn.rollback()
+            log(f"Upload error on {label}: {e}", "ERROR")
+            summary["errors"].append(f"{label}: {str(e)[:300]}")
+            return False
+
+    def upsert_projects_safely(parsed_p, label):
+        conn = request_conn()
+        try:
+            ins_p, upd_p = db.upsert_projects(parsed_p, conn=conn)
+            conn.commit()
+            summary["projects_inserted"] += ins_p
+            summary["projects_updated"] += upd_p
+        except Exception as e:
+            conn.rollback()
+            log(f"Upload error on {label}: {e}", "ERROR")
+            summary["errors"].append(f"{label}: {str(e)[:300]}")
+
     for f in files:
         fname = f.filename
         ext = os.path.splitext(fname)[1].lower()
@@ -810,10 +848,8 @@ def api_upload():
                 client = form_client or (df["Client"].iloc[0] if "Client" in df.columns and len(df) else os.path.splitext(fname)[0])
                 parsed, diag = parse_ticket_sheet(df, client=client, source_file=fname)
                 note_diagnostics(diag)
-                ins, upd = db.upsert_tickets(parsed, conn=request_conn())
-                summary["tickets_inserted"] += ins
-                summary["tickets_updated"] += upd
-                summary["files"].append({"name": fname, "rows_found": len(parsed)})
+                if upsert_tickets_safely(parsed, fname):
+                    summary["files"].append({"name": fname, "rows_found": len(parsed)})
 
             elif ext in (".xlsx", ".xls"):
                 buf = io.BytesIO(raw)
@@ -826,10 +862,8 @@ def api_upload():
                     note_diagnostics(diag)
                     if parsed.empty:
                         continue
-                    ins, upd = db.upsert_tickets(parsed, conn=request_conn())
-                    summary["tickets_inserted"] += ins
-                    summary["tickets_updated"] += upd
-                    rows_found += len(parsed)
+                    if upsert_tickets_safely(parsed, f"{fname} / {sheet_name}"):
+                        rows_found += len(parsed)
 
                 if not sheets:
                     summary["errors"].append(
@@ -844,9 +878,7 @@ def api_upload():
                     parsed_p, diag_p = parse_project_sheet(pdf, source_file=fname)
                     note_diagnostics({"rows_dropped": 0, "unmapped_columns": diag_p["unmapped_columns"]})
                     if not parsed_p.empty:
-                        ins_p, upd_p = db.upsert_projects(parsed_p, conn=request_conn())
-                        summary["projects_inserted"] += ins_p
-                        summary["projects_updated"] += upd_p
+                        upsert_projects_safely(parsed_p, f"{fname} / Client Project")
 
                 summary["files"].append({"name": fname, "rows_found": rows_found})
 
@@ -856,6 +888,10 @@ def api_upload():
         except Exception as e:
             log(f"Upload error on {fname}: {e}", "ERROR")
             summary["errors"].append(f"{fname}: {str(e)[:300]}")
+            try:
+                request_conn().rollback()
+            except Exception:
+                pass
 
     summary["success"] = len(summary["errors"]) == 0
     return jsonify(summary)

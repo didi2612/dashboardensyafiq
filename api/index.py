@@ -49,7 +49,7 @@ log("=" * 50)
 log("Dashboard starting (Flask + Neon Postgres)")
 log(f"Python: {sys.version}")
 
-pio.templates.default = "plotly_dark"
+pio.templates.default = "plotly_white"
 
 TICKET_DB_COL_BY_DISPLAY = {display: col for display, col in db.TICKET_DB_COLUMNS}
 
@@ -100,7 +100,7 @@ def build_warranty_charts(df):
         sc.columns = ["Status", "Count"]
         fig = px.pie(sc, names="Status", values="Count", title="Warranty Ticket Status",
                       color="Status", color_discrete_map=COLORS, hole=0.3)
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
         charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Task Type" in warranty_df.columns:
@@ -164,7 +164,7 @@ def build_project_charts(df):
         sc.columns = ["Status", "Count"]
         fig = px.pie(sc, names="Status", values="Count", title="Project Status Progress",
                       hole=0.3)
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Start date" in df.columns and "Due date" in df.columns and "Title" in df.columns:
@@ -192,8 +192,8 @@ def build_project_charts(df):
                     fig.update_yaxes(autorange="reversed", title=None)
                     fig.update_xaxes(title="Tarikh")
                     fig.update_layout(
-                        template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#c7cbe0"), showlegend=False,
+                        template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#374151"), showlegend=False,
                         height=max(200, 30*len(cdf)),
                     )
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'
@@ -213,11 +213,6 @@ def build_project_charts(df):
 
 
 def apply_filters(df, args):
-    if "Source File" in df.columns:
-        selected = args.getlist("source_file")
-        if selected:
-            df = df[df["Source File"].isin(selected)]
-
     if "Ticket Created Date" in df.columns:
         valid_dates = df["Ticket Created Date"].dropna()
         if len(valid_dates) > 0:
@@ -303,7 +298,7 @@ def build_charts(df):
             title="Ticket Status Distribution", color="Status",
             color_discrete_map=COLORS, hole=0.3,
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
         charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Priority" in df.columns:
@@ -314,7 +309,7 @@ def build_charts(df):
             title="Priority Distribution", color="Keutamaan",
             color_discrete_map=PRIORITY_COLORS, hole=0.3,
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2))
         charts["priority_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
@@ -326,7 +321,7 @@ def build_charts(df):
             title="Tickets by Client", color="Client",
             color_discrete_sequence=client_colors, text="Bilangan",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False, xaxis_tickangle=-45)
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
         charts["client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -345,7 +340,7 @@ def build_priority_charts(df):
         title="Priority Distribution", color="Keutamaan",
         color_discrete_map=PRIORITY_COLORS, hole=0.4,
     )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
     charts["priority_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Status" in df.columns:
@@ -355,7 +350,7 @@ def build_priority_charts(df):
             color="Ticket Status", title="Priority by Status",
             color_discrete_map=COLORS, barmode="group",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["priority_status_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
@@ -394,7 +389,7 @@ def build_ageing_charts(df):
                 color="Kumpulan Umur", color_discrete_map=AGEING_COLORS,
                 text="Bilangan", title=client,
             )
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False)
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
             charts["ageing_clients"][client] = {
                 "count": int(len(dc)),
                 "chart": fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False}),
@@ -409,7 +404,7 @@ def build_ageing_charts(df):
                 title="Days Open Distribution", color_discrete_sequence=["#3498db"],
                 marginal="box",
             )
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["days_hist"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "SLA Breach" in df.columns and "Client" in df.columns:
@@ -420,7 +415,7 @@ def build_ageing_charts(df):
             title="Total SLA Breaches", color_discrete_sequence=["#e74c3c"],
             text="Pelanggaran SLA",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), xaxis_tickangle=-45)
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
         charts["sla_breach_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -465,7 +460,7 @@ def build_client_comparison_charts(df):
             color="Status", color_discrete_sequence=px.colors.qualitative.Plotly[:len(status_counts)],
             text="Bilangan",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["count_by_status"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Status" in df_filtered.columns:
@@ -479,7 +474,7 @@ def build_client_comparison_charts(df):
         chart_clients, x="Client", y="Jumlah",
         title="Total Tickets by Client", color="Client", text="Jumlah",
     )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), showlegend=False, xaxis_tickangle=-45)
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
     charts["client_total_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     status_order = ["Pending", "In Progress", "Completed", "Closed"]
@@ -488,11 +483,11 @@ def build_client_comparison_charts(df):
         fig = go.Figure()
         for col in status_cols:
             color = COLORS.get(col, "#95a5a6")
-            fig.add_trace(go.Bar(name=col, x=chart_clients["Client"], y=chart_clients[col], marker_color=color, text=chart_clients[col], textposition="outside", textfont=dict(color="#c7cbe0", size=10)))
+            fig.add_trace(go.Bar(name=col, x=chart_clients["Client"], y=chart_clients[col], marker_color=color, text=chart_clients[col], textposition="outside", textfont=dict(color="#374151", size=10)))
         fig.update_layout(
             barmode="group", title="Status by Client",
-            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#c7cbe0"), xaxis_tickangle=-45,
+            template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#374151"), xaxis_tickangle=-45,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         )
         charts["status_by_client"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
@@ -509,7 +504,7 @@ def build_client_comparison_charts(df):
                 cats = [c.replace("Priority_", "") for c in categories]
                 cats.append(cats[0])
                 fig.add_trace(go.Scatterpolar(r=values, theta=cats, fill="toself", name=row["Client"]))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True)), title="Priority Profile by Client", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True)), title="Priority Profile by Client", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["client_radar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -533,7 +528,7 @@ def build_timeline_charts(df):
         title="Tickets Created by Month", markers=True,
         color_discrete_sequence=["#3498db"],
     )
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
     charts["timeline_created"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Completed Date" in df.columns:
@@ -546,13 +541,13 @@ def build_timeline_charts(df):
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Dicipta"], mode="lines+markers", name="Dicipta", line=dict(color="#3498db", width=2)))
             fig.add_trace(go.Scatter(x=merged["Bulan"], y=merged["Selesai"], mode="lines+markers", name="Selesai", line=dict(color="#2ecc71", width=2)))
-            fig.update_layout(title="Created vs Completed", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), xaxis_tickangle=-45)
+            fig.update_layout(title="Created vs Completed", template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), xaxis_tickangle=-45)
             charts["timeline_created_vs_completed"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
         client_monthly = df_dated.groupby(["Bulan", "Client"]).size().reset_index(name="Bilangan")
         fig = px.area(client_monthly, x="Bulan", y="Bilangan", color="Client", title="Tickets by Client and Month")
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["timeline_client_area"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Ticket Category" in df.columns:
@@ -561,7 +556,7 @@ def build_timeline_charts(df):
             top_cats = df_dated["Ticket Category"].value_counts().head(8).index.tolist()
             cat_monthly = cat_monthly[cat_monthly["Ticket Category"].isin(top_cats)]
             fig = px.line(cat_monthly, x="Bulan", y="Bilangan", color="Ticket Category", title="Tickets by Category (Top 8)", markers=True)
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+            fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
             charts["timeline_category"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     return charts
@@ -593,7 +588,7 @@ def build_sla_charts(df):
             threshold=dict(line=dict(color="white", width=2), thickness=0.75, value=compliance_rate),
         ),
     ))
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"), height=350)
+    fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), height=350)
     charts["sla_gauge"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Client" in df.columns:
@@ -607,7 +602,7 @@ def build_sla_charts(df):
             color="Kadar Pematuhan (%)", color_continuous_scale=["#e74c3c", "#f39c12", "#2ecc71"],
             text="Kadar Pematuhan (%)",
         )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#c7cbe0"))
+        fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"))
         charts["sla_client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
         if "Ticket Status" in df.columns:
@@ -621,8 +616,6 @@ def build_sla_charts(df):
 
 def get_filter_options(df):
     options = {}
-    if "Source File" in df.columns:
-        options["source_files"] = sorted(df["Source File"].dropna().unique())
     if "Client" in df.columns:
         options["clients"] = sorted(df["Client"].unique())
     if "Priority" in df.columns:
@@ -653,7 +646,6 @@ def index():
     filter_options["search"] = request.args.get("search", "")
     filter_options["date_start"] = request.args.get("date_start", "")
     filter_options["date_end"] = request.args.get("date_end", "")
-    filter_options["selected_source_files"] = request.args.getlist("source_file")
     filter_options["selected_clients"] = request.args.getlist("client")
     filter_options["selected_priorities"] = request.args.getlist("priority")
     filter_options["selected_statuses"] = request.args.getlist("status")
@@ -670,7 +662,6 @@ def index():
         "total_filtered": len(df_filtered),
         "load_errors": load_errors,
         "columns": list(df.columns) if not df.empty else [],
-        "source_files": list(df["Source File"].dropna().unique()) if not df.empty and "Source File" in df.columns else [],
         "counts": counts,
     }
 

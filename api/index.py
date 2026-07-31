@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 
 load_dotenv()
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env.local"), override=True)
@@ -32,6 +32,13 @@ app = Flask(
 
 MAX_UPLOAD_MB = 25
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+
+PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+
+@app.route("/sw.svg")
+def brand_watermark():
+    return send_from_directory(PROJECT_ROOT, "sw.svg", mimetype="image/svg+xml")
 
 
 def log(msg, level="INFO"):

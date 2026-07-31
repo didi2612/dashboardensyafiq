@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Software Wizard (M) Sdn Bhd &mdash; Client Issues Dashboard</title>
+<title>Software Wizard (M) Sdn Bhd : Client Issues Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -48,8 +48,32 @@ body{
     radial-gradient(circle at 88% 0%, rgba(34,211,238,0.20), transparent 40%),
     radial-gradient(circle at 50% 100%, rgba(99,102,241,0.12), transparent 45%);
   background-attachment:fixed;
+  position:relative;
 }
-.container{max-width:1440px;margin:0 auto}
+/* Faint brand-mark watermark, sitting behind everything */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url('/sw.svg');
+  background-repeat:no-repeat;
+  background-position:right -120px bottom -120px;
+  background-size:min(60vw,720px);
+  opacity:0.05;
+  filter:grayscale(1) brightness(1.8);
+}
+/* Subtle film-grain so the dark glass doesn't read as a flat AI-gradient */
+body::after{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  opacity:0.035;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.container{max-width:1440px;margin:0 auto;position:relative;z-index:1}
+
+/* Lit-from-above edge on every glass panel, so panels read as raised
+   surfaces instead of flat translucent rectangles. */
+.topbar,.controls,.tabs,.metric-card,.chart-box,.chart-full,
+.client-section,.debug-box,.empty-state{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.09), 0 10px 30px -18px rgba(0,0,0,0.6);
+}
 
 /* ---------- Brand header ---------- */
 .topbar{
@@ -138,7 +162,11 @@ body{
   content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--gradient);opacity:0.85;
 }
 .metric-card:hover{transform:translateY(-2px);border-color:var(--border-strong)}
-.metric-card .val{font-family:'Sora',sans-serif;font-size:1.9rem;font-weight:700;color:var(--text);letter-spacing:-0.5px}
+.metric-card .val{
+  font-family:'Sora',sans-serif;font-size:2rem;font-weight:800;letter-spacing:-0.6px;
+  background:linear-gradient(135deg,#ffffff 10%,#c9c3f5 60%,#93e4f5 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
 .metric-card .lbl{font-size:0.78rem;color:var(--text-dim);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
 
 /* ---------- Chart containers ---------- */
@@ -248,7 +276,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 .modal-box{
   width:100%;max-width:520px;max-height:90vh;overflow-y:auto;
   background:#0c0f1e;border:1px solid var(--border-strong);border-radius:var(--radius-lg);
-  padding:26px;box-shadow:0 24px 60px rgba(0,0,0,0.55);
+  padding:26px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.09), 0 24px 60px rgba(0,0,0,0.55);
   animation:modalIn .2s ease;
 }
 @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
@@ -319,7 +347,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   </div>
   <div class="topbar-actions">
     <span class="data-pill">{{ data_info.counts.tickets }} tickets &middot; {{ data_info.counts.projects }} projects</span>
-    <div class="topbar-meta"><span class="dot"></span>Last synced &mdash; {{ now }}</div>
+    <div class="topbar-meta"><span class="dot"></span>Last synced {{ now }}</div>
     <button type="button" class="btn-pill primary" onclick="openUploadModal()">&#8593; Upload Data</button>
     <button type="button" class="btn-pill danger" onclick="openRestartModal()">&#8635; Reset Database</button>
   </div>
@@ -333,7 +361,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
     </div>
     <div class="modal-sub">
       Drop a <strong>.csv</strong> or <strong>.xlsx</strong> file. Existing tickets are matched by
-      <strong>Client + Ticket No</strong> &mdash; matches get updated in place, everything else is
+      <strong>Client + Ticket No</strong>. Matches get updated in place, everything else is
       added as new. Nothing is ever deleted.
     </div>
     <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
@@ -644,7 +672,7 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   {% endif %}
   {% for client, data in ageing_charts.ageing_clients.items() %}
   <div class="client-section">
-    <h4>{{ client }} &mdash; {{ data.count }} records</h4>
+    <h4>{{ client }} ({{ data.count }} records)</h4>
     <div class="chart-row">
       <div class="chart-box" style="flex:0.4;min-width:200px">
         <table>
@@ -757,10 +785,10 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   {% set skip_cols_8 = ['_row_idx', 'Source File'] %}
   {% for bucket, clients in ageing_list_data.buckets.items() %}
   <div class="client-section">
-    <h4>{{ bucket }} &mdash;
+    <h4>{{ bucket }} (
       {% set ns = namespace(count=0) %}
       {% for c, d in clients.items() %}{% set ns.count = ns.count + d.count %}{% endfor %}
-      {{ ns.count }} tickets
+      {{ ns.count }} tickets)
     </h4>
     {% for client, data in clients.items() %}
     <details>

@@ -440,6 +440,10 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
   <div class="topbar-actions">
     <span class="data-pill">{{ data_info.counts.tickets }} tickets &middot; {{ data_info.counts.projects }} projects</span>
     <div class="topbar-meta"><span class="dot"></span>Last synced {{ now }}</div>
+    <button type="button" class="btn-pill" id="fullscreenBtn" onclick="toggleFullscreen()">
+      <span class="fs-icon">&#9974;</span><span class="fs-label">Fullscreen</span>
+    </button>
+    <button type="button" class="btn-pill" onclick="refreshWithSplash()">&#10227; Refresh</button>
     <button type="button" class="btn-pill primary" onclick="openUploadModal()">&#8593; Upload Data</button>
     <button type="button" class="btn-pill danger" onclick="openRestartModal()">&#8635; Reset Database</button>
     <button type="button" class="btn-pill" id="installAppBtn" onclick="installApp()" style="display:none">&#8615; Install App</button>
@@ -974,6 +978,44 @@ window.addEventListener('appinstalled', function() {
   var btn = document.getElementById('installAppBtn');
   if (btn) btn.style.display = 'none';
 });
+
+/* ---------- Fullscreen ---------- */
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function toggleFullscreen() {
+  try {
+    var el = document.documentElement;
+    if (!isFullscreen()) {
+      var req = el.requestFullscreen || el.webkitRequestFullscreen;
+      var result = req && req.call(el);
+      if (result && result.catch) result.catch(function() {});
+    } else {
+      var exit = document.exitFullscreen || document.webkitExitFullscreen;
+      var result2 = exit && exit.call(document);
+      if (result2 && result2.catch) result2.catch(function() {});
+    }
+  } catch (e) {
+    console.warn('Fullscreen toggle failed', e);
+  }
+}
+
+function syncFullscreenBtn() {
+  var btn = document.getElementById('fullscreenBtn');
+  if (!btn) return;
+  var fs = isFullscreen();
+  btn.querySelector('.fs-icon').innerHTML = fs ? '&#10005;' : '&#9974;';
+  btn.querySelector('.fs-label').textContent = fs ? 'Exit Fullscreen' : 'Fullscreen';
+}
+document.addEventListener('fullscreenchange', syncFullscreenBtn);
+document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
+
+/* ---------- Refresh (also brings the splash screen back) ---------- */
+function refreshWithSplash() {
+  try { sessionStorage.removeItem('swSplashShown'); } catch (e) {}
+  window.location.reload();
+}
 
 function switchTab(idx) {
   document.querySelectorAll('.tab-btn').forEach(function(b, i) {

@@ -22,7 +22,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env
 import db
 from data_utils import (
     COLORS, PRIORITY_COLORS, AGEING_COLORS,
-    parse_ticket_sheet, parse_project_sheet, detect_ticket_sheets,
+    parse_ticket_sheet, parse_project_sheet, parse_client_sheet, detect_ticket_sheets,
 )
 
 app = Flask(
@@ -70,6 +70,7 @@ log(f"Python: {sys.version}")
 pio.templates.default = "plotly_white"
 
 TICKET_DB_COL_BY_DISPLAY = {display: col for display, col in db.TICKET_DB_COLUMNS}
+CLIENT_DB_COL_BY_DISPLAY = {display: col for display, col in db.CLIENT_DB_COLUMNS}
 
 _schema_ready = False
 
@@ -138,6 +139,11 @@ def load_data(filters=None):
 def load_project_data():
     ensure_schema()
     return db.fetch_projects_df(conn=request_conn())
+
+
+def load_client_data():
+    ensure_schema()
+    return db.fetch_clients_df(conn=request_conn())
 
 
 def build_warranty_charts(df):
@@ -273,6 +279,67 @@ def build_project_charts(df):
             detail[c] = detail[c].dt.strftime("%d/%m/%Y") if not detail[c].isna().all() else detail[c]
     detail = detail.fillna("")
     charts["detail_data"] = detail.to_dict("records")
+
+    return charts
+
+
+def build_overall_client_charts(df):
+    charts = {}
+    if df.empty:
+        return charts
+
+    total = len(df)
+    unique_clients = df["Client"].nunique() if "Client" in df.columns else 0
+    charts["metrics"] = {"total": total, "clients": unique_clients}
+
+    if "Projek Status" in df.columns:
+        valid_status = df.dropna(subset=["Projek Status"])
+        if not valid_status.empty:
+            sc = valid_status["Projek Status"].value_counts().reset_index()
+            sc.columns = ["Projek Status", "Count"]
+            charts["status_counts"] = sc.to_dict("records")
+            fig = px.pie(
+                sc, names="Projek Status", values="Count",
+                title="Projects by Status", color="Projek Status",
+                hole=0.3,
+            )
+            fig.update_layout(
+                template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#374151"), legend=dict(orientation="h", yanchor="bottom", y=-0.2),
+            )
+            charts["status_pie"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
+
+    display_cols = ["Client", "Projek ID", "Projek Name", "Projek Status", "Start Date", "End Date"]
+    avail = [c for c in display_cols if c in df.columns]
+    meta_cols = [c for c in ["_row_idx", "Source File"] if c in df.columns]
+    detail = df[avail + meta_cols].copy()
+    for c in ["Start Date", "End Date"]:
+        if c in detail.columns and not detail[c].isna().all():
+            detail[c] = detail[c].dt.strftime("%d/%m/%Y")
+    detail = detail.fillna("")
+    charts["detail_data"] = detail.to_dict("records")
+
+    charts["status_sections"] = {}
+    if "Projek Status" in detail.columns:
+        status_order = ["Development", "Warranty", "Maintenance"]
+        statuses = detail["Projek Status"].dropna().unique()
+        for status in status_order:
+            if status in statuses:
+                sdf = detail[detail["Projek Status"] == status]
+                if sdf.empty:
+                    continue
+                charts["status_sections"][status] = {
+                    "count": int(len(sdf)),
+                    "rows": sdf.to_dict("records"),
+                }
+        for status in sorted(set(statuses) - set(status_order), key=lambda s: str(s).lower()):
+            sdf = detail[detail["Projek Status"] == status]
+            if sdf.empty:
+                continue
+            charts["status_sections"][status] = {
+                "count": int(len(sdf)),
+                "rows": sdf.to_dict("records"),
+            }
 
     return charts
 
@@ -695,6 +762,13 @@ def index():
         project_df = pd.DataFrame()
     has_project = not project_df.empty
 
+    try:
+        client_df = load_client_data()
+    except Exception as e:
+        log(f"DB error loading clients: {e}", "ERROR")
+        client_df = pd.DataFrame()
+    has_client = not client_df.empty
+
     if has_data:
         overview_charts = build_charts(df)
         priority_charts = build_priority_charts(df)
@@ -708,6 +782,8 @@ def index():
         overview_charts = priority_charts = ageing_charts = {}
         comparison_charts = timeline_charts = sla_charts = {}
         warranty_charts = project_charts = {}
+
+    overall_client_charts = build_overall_client_charts(client_df) if has_client else {}
 
     display_cols = [
         "Client", "Ticket No", "Task Type", "Project", "Company",
@@ -761,6 +837,7 @@ def index():
         "dashboard.html",
         has_data=has_data,
         has_project=has_project,
+        has_client=has_client,
         data_info=data_info,
         filter_options=filter_options,
         overview_charts=overview_charts,
@@ -771,6 +848,7 @@ def index():
         sla_charts=sla_charts,
         warranty_charts=warranty_charts,
         project_charts=project_charts,
+        overall_client_charts=overall_client_charts,
         project_data=project_df.to_dict("records") if has_project else [],
         detail_by_client=detail_by_client,
         ageing_list_data=ageing_list_data,
@@ -789,7 +867,8 @@ def api_upload():
     form_client = request.form.get("client", "").strip()
 
     summary = {"files": [], "tickets_inserted": 0, "tickets_updated": 0,
-               "projects_inserted": 0, "projects_updated": 0, "errors": [],
+               "projects_inserted": 0, "projects_updated": 0,
+               "clients_inserted": 0, "clients_updated": 0, "errors": [],
                "rows_dropped": 0, "unmapped_columns": []}
     seen_unmapped = set()
 
@@ -838,6 +917,18 @@ def api_upload():
             log(f"Upload error on {label}: {e}", "ERROR")
             summary["errors"].append(f"{label}: {str(e)[:300]}")
 
+    def upsert_clients_safely(parsed_c, label):
+        conn = request_conn()
+        try:
+            ins_c, upd_c = db.upsert_clients(parsed_c, conn=conn)
+            conn.commit()
+            summary["clients_inserted"] += ins_c
+            summary["clients_updated"] += upd_c
+        except Exception as e:
+            conn.rollback()
+            log(f"Upload error on {label}: {e}", "ERROR")
+            summary["errors"].append(f"{label}: {str(e)[:300]}")
+
     for f in files:
         fname = f.filename
         ext = os.path.splitext(fname)[1].lower()
@@ -879,6 +970,14 @@ def api_upload():
                     note_diagnostics({"rows_dropped": 0, "unmapped_columns": diag_p["unmapped_columns"]})
                     if not parsed_p.empty:
                         upsert_projects_safely(parsed_p, f"{fname} / Client Project")
+
+                if "Client" in xl.sheet_names:
+                    buf.seek(0)
+                    cdf = pd.read_excel(buf, sheet_name="Client", header=0, engine="openpyxl")
+                    parsed_c, diag_c = parse_client_sheet(cdf, source_file=fname)
+                    note_diagnostics({"rows_dropped": diag_c["rows_dropped"], "unmapped_columns": diag_c["unmapped_columns"]})
+                    if not parsed_c.empty:
+                        upsert_clients_safely(parsed_c, f"{fname} / Client")
 
                 summary["files"].append({"name": fname, "rows_found": rows_found})
 
@@ -923,6 +1022,17 @@ def api_save():
     row_idx = data.get("row_idx")
     column = data.get("column")
     value = data.get("value")
+    sheet = data.get("sheet")
+
+    if sheet == "Client":
+        db_column = CLIENT_DB_COL_BY_DISPLAY.get(column)
+        if not db_column:
+            return {"success": False, "error": f"Column not editable: {column}"}
+        try:
+            db.update_client_field(int(row_idx), db_column, value, conn=request_conn())
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     db_column = TICKET_DB_COL_BY_DISPLAY.get(column)
     if not db_column:

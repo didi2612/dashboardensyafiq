@@ -58,6 +58,16 @@ PROJECT_DB_COLUMNS = [
     ("Dedup Seq", "dedup_seq"),
 ]
 
+CLIENT_DB_COLUMNS = [
+    ("Client", "client"),
+    ("Projek ID", "projek_id"),
+    ("Projek Name", "projek_name"),
+    ("Projek Status", "projek_status"),
+    ("Start Date", "start_date"),
+    ("End Date", "end_date"),
+    ("Source File", "source_file"),
+]
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS tickets (
     id SERIAL PRIMARY KEY,
@@ -112,6 +122,20 @@ CREATE TABLE IF NOT EXISTS projects (
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS duration TEXT;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS dedup_seq INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS clients (
+    id SERIAL PRIMARY KEY,
+    client TEXT,
+    projek_id TEXT,
+    projek_name TEXT,
+    projek_status TEXT,
+    start_date DATE,
+    end_date DATE,
+    source_file TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (client, projek_id)
+);
 
 -- The source "Client Project" sheet has many rows with a blank title
 -- and/or start/due date (sub-item description lines, section
@@ -272,6 +296,37 @@ def upsert_projects(df, conn=None):
     return inserted, updated
 
 
+def upsert_clients(df, conn=None):
+    """Insert new client rows / update existing ones (matched by client + projek id).
+
+    Returns (inserted_count, updated_count).
+    """
+    if df.empty:
+        return 0, 0
+
+    records = _records_for_insert(df, CLIENT_DB_COLUMNS)
+    db_cols = [c for _, c in CLIENT_DB_COLUMNS]
+    update_cols = [c for c in db_cols if c not in ("client", "projek_id")]
+    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+
+    sql = f"""
+        INSERT INTO clients ({', '.join(db_cols)})
+        VALUES %s
+        ON CONFLICT (client, projek_id) DO UPDATE SET
+            {set_clause},
+            updated_at = now()
+        RETURNING (xmax = 0) AS inserted
+    """
+
+    with db_connection(conn) as c:
+        with c.cursor() as cur:
+            results = psycopg2.extras.execute_values(cur, sql, records, page_size=500, fetch=True)
+
+    inserted = sum(1 for r in results if r[0])
+    updated = len(results) - inserted
+    return inserted, updated
+
+
 TICKET_SEARCH_COLUMNS = ["ticket_detail", "ticket_title", "ticket_no", "ticket_category", "company", "project"]
 
 
@@ -387,6 +442,27 @@ def fetch_projects_df(conn=None):
     return df
 
 
+def fetch_clients_df(conn=None):
+    db_cols = [c for _, c in CLIENT_DB_COLUMNS]
+    display_cols = [c for c, _ in CLIENT_DB_COLUMNS]
+    sql = f"SELECT id, {', '.join(db_cols)} FROM clients ORDER BY client, projek_id"
+
+    with db_connection(conn) as c:
+        df = pd.read_sql_query(sql, c)
+
+    if df.empty:
+        return pd.DataFrame(columns=["_row_idx"] + display_cols)
+
+    df = df.rename(columns=dict(zip(db_cols, display_cols)))
+    df = df.rename(columns={"id": "_row_idx"})
+
+    for col in ["Start Date", "End Date"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col])
+
+    return df
+
+
 def get_counts(conn=None):
     with db_connection(conn) as c:
         with c.cursor() as cur:
@@ -394,21 +470,25 @@ def get_counts(conn=None):
             tickets = cur.fetchone()[0]
             cur.execute("SELECT count(*) FROM projects")
             projects = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM clients")
+            clients = cur.fetchone()[0]
             cur.execute("SELECT max(updated_at) FROM tickets")
             last_ticket_update = cur.fetchone()[0]
     return {
         "tickets": tickets,
         "projects": projects,
+        "clients": clients,
         "last_updated": last_ticket_update.strftime("%d/%m/%Y %H:%M") if last_ticket_update else None,
     }
 
 
 def reset_all(conn=None):
-    """Wipe all ticket & project data. Used by the 'Restart' button."""
+    """Wipe all ticket, project & client data. Used by the 'Restart' button."""
     with db_connection(conn) as c:
         with c.cursor() as cur:
             cur.execute("TRUNCATE TABLE tickets RESTART IDENTITY")
             cur.execute("TRUNCATE TABLE projects RESTART IDENTITY")
+            cur.execute("TRUNCATE TABLE clients RESTART IDENTITY")
 
 
 def update_ticket_field(row_id, db_column, value, conn=None):
@@ -419,5 +499,17 @@ def update_ticket_field(row_id, db_column, value, conn=None):
         with c.cursor() as cur:
             cur.execute(
                 f"UPDATE tickets SET {db_column} = %s, updated_at = now() WHERE id = %s",
+                (value, row_id),
+            )
+
+
+def update_client_field(row_id, db_column, value, conn=None):
+    valid_cols = {c for _, c in CLIENT_DB_COLUMNS}
+    if db_column not in valid_cols:
+        raise ValueError(f"Unknown column: {db_column}")
+    with db_connection(conn) as c:
+        with c.cursor() as cur:
+            cur.execute(
+                f"UPDATE clients SET {db_column} = %s, updated_at = now() WHERE id = %s",
                 (value, row_id),
             )

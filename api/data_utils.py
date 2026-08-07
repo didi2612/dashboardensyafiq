@@ -89,6 +89,11 @@ PROJECT_COLUMNS = [
     "Dedup Seq",
 ]
 
+CLIENT_COLUMNS = [
+    "Client", "Projek ID", "Projek Name", "Projek Status",
+    "Start Date", "End Date", "Source File",
+]
+
 
 def standardize_columns(df):
     col_map = {}
@@ -352,6 +357,49 @@ def parse_project_sheet(df, source_file):
             df[col] = None
 
     return df[PROJECT_COLUMNS], {"unmapped_columns": unmapped_columns}
+
+
+def parse_client_sheet(df, source_file):
+    """Standardize the workbook's 'Client' sheet into the canonical client dataframe.
+
+    The sheet lists every project under its owning client (one row per
+    Projek ID) with its status and, where filled, contract start/end
+    dates. Returns (parsed_df, info) using the same diagnostics shape as
+    the ticket/project parsers so uploads report what got left behind.
+    """
+    df = df.dropna(how="all").copy()
+    df = standardize_columns(df)
+    if df.empty:
+        return df, {"rows_dropped": 0, "unmapped_columns": []}
+
+    df["Source File"] = source_file
+
+    if "Client" in df.columns:
+        df["Client"] = df["Client"].ffill()
+
+    for c in ["Start Date", "End Date"]:
+        if c in df.columns:
+            df[c] = pd.to_datetime(df[c], errors="coerce", dayfirst=True)
+
+    unmapped_columns = [c for c in df.columns if c not in CLIENT_COLUMNS]
+
+    rows_dropped = 0
+    if "Projek ID" in df.columns:
+        pid = df["Projek ID"]
+        if isinstance(pid, pd.DataFrame):
+            pid = pid.iloc[:, 0]
+        pid_str = pid.astype(str).str.strip()
+        valid = pid.notna() & pid_str.ne("") & pid_str.str.lower().ne("nan")
+        rows_dropped = int((~valid).sum())
+        df = df[valid]
+    else:
+        df["Projek ID"] = None
+
+    for col in CLIENT_COLUMNS:
+        if col not in df.columns:
+            df[col] = None
+
+    return df[CLIENT_COLUMNS], {"rows_dropped": rows_dropped, "unmapped_columns": unmapped_columns}
 
 
 def detect_ticket_sheets(filepath_or_buffer):

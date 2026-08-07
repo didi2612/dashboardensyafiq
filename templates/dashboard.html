@@ -624,20 +624,22 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 {% else %}
 
 <div class="tabs" id="tabs">
-  <button class="tab-btn active" onclick="switchTab(0)">Overview</button>
-  <button class="tab-btn" onclick="switchTab(1)">Maintenance Issue</button>
-  <button class="tab-btn" onclick="switchTab(2)">Warranty Issue</button>
-  <button class="tab-btn" onclick="switchTab(3)">Project Progress</button>
-  <button class="tab-btn" onclick="switchTab(4)">Ageing Analysis</button>
-  <button class="tab-btn" onclick="switchTab(5)">Timeline</button>
-  <button class="tab-btn" onclick="switchTab(6)">SLA Compliance</button>
-  <button class="tab-btn" onclick="switchTab(7)">Ticket Details</button>
-  <button class="tab-btn" onclick="switchTab(8)">Ageing List</button>
+  <button class="tab-btn active" onclick="switchTab(9, this)">Overall Client</button>
+  <button class="tab-btn" onclick="switchTab(0, this)">Overview</button>
+  <button class="tab-btn" onclick="switchTab(1, this)">Maintenance</button>
+  <button class="tab-btn" onclick="switchTab(2, this)">Warranty</button>
+  <button class="tab-btn" onclick="switchTab(3, this)">Project</button>
+  <button class="tab-btn" onclick="switchTab(5, this)">Ticket Analysis</button>
+  <button class="tab-btn" onclick="switchTab(7, this)">Ticket Details</button>
+  <button class="tab-btn" onclick="switchTab(4, this)">Ageing Analysis</button>
+  <button class="tab-btn" onclick="switchTab(8, this)">Ageing List</button>
+  <button class="tab-btn" onclick="switchTab(6, this)">SLA Compliance</button>
+   
 </div>
 
 <div class="tab-content">
 
-<div class="tab-pane active" id="tab-0">
+<div class="tab-pane" id="tab-0">
   <div class="metrics">
     <div class="metric-card"><div class="val">{{ overview_charts.metrics.total }}</div><div class="lbl">Total Tickets</div></div>
     <div class="metric-card"><div class="val" style="color:var(--success)">{{ overview_charts.metrics.completed }}</div><div class="lbl">Completed <span style="color:var(--text-dim);font-size:0.75rem;text-transform:none">({{ overview_charts.metrics.completed_pct }})</span></div></div>
@@ -939,6 +941,106 @@ hr{border-color:#d0d5dd;margin:1.2rem 0}
 {% endif %}
 </div>
 
+<div class="tab-pane active" id="tab-9">
+  {% if has_client and overall_client_charts and overall_client_charts.metrics %}
+  <div class="metrics">
+    <div class="metric-card"><div class="val">{{ overall_client_charts.metrics.total }}</div><div class="lbl">Total Projects</div></div>
+    <div class="metric-card"><div class="val" style="color:var(--info)">{{ overall_client_charts.metrics.clients }}</div><div class="lbl">Total Clients</div></div>
+  </div>
+  <div class="chart-row">
+    {% if overall_client_charts.status_pie %}
+    <div class="chart-box">{{ overall_client_charts.status_pie|safe }}</div>
+    {% endif %}
+    {% if overall_client_charts.status_counts %}
+    <div class="chart-box">
+      <h3>Projects by Status</h3>
+      <div class="data-table-wrap">
+        <table>
+          <thead><tr><th>Projek Status</th><th>Count</th></tr></thead>
+          <tbody>
+          {% for s in overall_client_charts.status_counts %}
+            <tr><td>{{ s['Projek Status'] }}</td><td>{{ s['Count'] }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <div class="chart-full">
+    <div class="edit-bar" style="margin-bottom:4px">
+      <span style="flex:1"></span>
+      <button class="btn-save" id="saveBtn9" onclick="saveChanges9()" style="display:none">Save Changes</button>
+      <button class="btn-cancel" id="cancelBtn9" onclick="cancelEdit9()" style="display:none">Cancel</button>
+      <button class="btn-edit" id="editBtn9" onclick="toggleEdit9()">Enable Editing</button>
+    </div>
+    {% if overall_client_charts.status_sections %}
+    {% for status, section in overall_client_charts.status_sections.items() %}
+    <h3 style="margin-top:18px">{{ status }} ({{ section.count }})</h3>
+    <div class="data-table-wrap">
+      <table class="client-table">
+        <thead>
+          <tr>
+            {% if section.rows and section.rows[0] is defined %}
+            {% set skip_cols_9 = ['_row_idx', 'Source File'] %}
+            {% for key in section.rows[0].keys() %}
+              {% if key not in skip_cols_9 %}
+              <th>{{ key }}</th>
+              {% endif %}
+            {% endfor %}
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in section.rows %}
+          <tr data-row-idx="{{ row.get('_row_idx', '') }}" data-source="{{ row.get('Source File', '') }}" data-sheet="Client">
+            {% for key, val in row.items() %}
+              {% if key not in skip_cols_9 %}
+              <td class="editable-cell" data-col="{{ key }}">{{ val if val is not none and val != 'None' and val != 'nan' else '' }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+    {% else %}
+    <h3>Overall Client</h3>
+    <div class="data-table-wrap" id="client-table-wrap">
+      <table id="client-table">
+        <thead>
+          <tr>
+            {% if overall_client_charts.detail_data and overall_client_charts.detail_data[0] is defined %}
+            {% set skip_cols_9 = ['_row_idx', 'Source File'] %}
+            {% for key in overall_client_charts.detail_data[0].keys() %}
+              {% if key not in skip_cols_9 %}
+              <th>{{ key }}</th>
+              {% endif %}
+            {% endfor %}
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in overall_client_charts.detail_data %}
+          <tr data-row-idx="{{ row.get('_row_idx', '') }}" data-source="{{ row.get('Source File', '') }}" data-sheet="Client">
+            {% for key, val in row.items() %}
+              {% if key not in skip_cols_9 %}
+              <td class="editable-cell" data-col="{{ key }}">{{ val if val is not none and val != 'None' and val != 'nan' else '' }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="alert alert-warning">No Client data found</div>
+  {% endif %}
+</div>
+
 {% endif %}
 </div>
 
@@ -1046,9 +1148,9 @@ function refreshWithSplash() {
   });
 })();
 
-function switchTab(idx) {
-  document.querySelectorAll('.tab-btn').forEach(function(b, i) {
-    b.classList.toggle('active', i === idx);
+function switchTab(idx, btn) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) {
+    b.classList.toggle('active', b === btn);
   });
   document.querySelectorAll('.tab-pane').forEach(function(p, i) {
     p.classList.toggle('active', i === idx);
@@ -1299,7 +1401,8 @@ function makeEditableMulti(tableClass, saveBtnId, cancelBtnId, editBtnId, tabId)
 
 var editTables = [
   ['warranty-table', 'saveBtn2', 'cancelBtn2', 'editBtn2'],
-  ['project-table', 'saveBtn3', 'cancelBtn3', 'editBtn3']
+  ['project-table', 'saveBtn3', 'cancelBtn3', 'editBtn3'],
+  ['client-table', 'saveBtn9', 'cancelBtn9', 'editBtn9']
 ];
 
 editTables.forEach(function(args) {
@@ -1307,6 +1410,10 @@ editTables.forEach(function(args) {
     makeEditable(args[0], args[1], args[2], args[3]);
   }
 });
+
+if (document.getElementById('editBtn9')) {
+  makeEditableMulti('client-table', 'saveBtn9', 'cancelBtn9', 'editBtn9', 'tab-9');
+}
 
 if (document.querySelector('.detail-table')) {
   makeEditableMulti('detail-table', 'saveBtn', 'cancelBtn', 'editBtn', 'tab-7');
@@ -1321,6 +1428,9 @@ function cancelEdit2() { return false; }
 function toggleEdit3() { return false; }
 function saveChanges3() { return false; }
 function cancelEdit3() { return false; }
+function toggleEdit9() { return false; }
+function saveChanges9() { return false; }
+function cancelEdit9() { return false; }
 
 function toggleEdit8() {
   var btn = document.getElementById('editBtn8');

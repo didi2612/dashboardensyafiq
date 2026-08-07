@@ -22,7 +22,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env.local"))
 import pandas as pd
 
 import db
-from data_utils import detect_ticket_sheets, parse_ticket_sheet, parse_project_sheet
+from data_utils import detect_ticket_sheets, parse_ticket_sheet, parse_project_sheet, parse_client_sheet
 
 
 def find_default_workbook():
@@ -74,9 +74,19 @@ def main():
             ins_p, upd_p = db.upsert_projects(parsed_p)
             print(f"  Client Project: {len(parsed_p)} rows -> {ins_p} inserted, {upd_p} updated")
 
+    if "Client" in xl.sheet_names:
+        cdf = pd.read_excel(filepath, sheet_name="Client", header=0, engine="openpyxl")
+        parsed_c, diag_c = parse_client_sheet(cdf, source_file=fname)
+        if diag_c["unmapped_columns"]:
+            print(f"  Client: columns not stored: {diag_c['unmapped_columns']}")
+        dropped_note = f", {diag_c['rows_dropped']} row(s) skipped (no Projek ID)" if diag_c["rows_dropped"] else ""
+        if not parsed_c.empty:
+            ins_c, upd_c = db.upsert_clients(parsed_c)
+            print(f"  Client: {len(parsed_c)} rows -> {ins_c} inserted, {upd_c} updated{dropped_note}")
+
     print(f"\nDone. Tickets: {total_ins} inserted, {total_upd} updated.")
     counts = db.get_counts()
-    print(f"Database now has {counts['tickets']} tickets and {counts['projects']} project rows.")
+    print(f"Database now has {counts['tickets']} tickets, {counts['projects']} project rows and {counts['clients']} client rows.")
 
 
 if __name__ == "__main__":

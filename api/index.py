@@ -243,6 +243,37 @@ def recompute_overall_progress(df):
     return df
 
 
+def recompute_status_from_percentage(df):
+    """Status Progress and Progress are meant to track each row's own
+    Percentage (0 = Not Started, 1-99 = In Progress, 100 = Completed), but
+    rows saved before that rule existed -- or edited directly in the
+    source spreadsheet -- can carry a stale label that no longer matches
+    the number. Recompute both label columns from Percentage on every
+    load so they (and the metrics/pie chart that count them) never drift
+    out of sync with it. Rows with a blank/non-numeric Percentage are left
+    untouched since there's nothing to derive a label from.
+    """
+    if df.empty or "Percentage" not in df.columns:
+        return df
+
+    df = df.copy()
+    pct = pd.to_numeric(df["Percentage"], errors="coerce")
+    has_pct = pct.notna()
+
+    def label(n):
+        if n <= 0:
+            return "Not Started"
+        if n >= 100:
+            return "Completed"
+        return "In Progress"
+
+    status = pct.apply(lambda n: label(n) if pd.notna(n) else None)
+    for col in ("Status Progress", "Progress"):
+        if col in df.columns:
+            df.loc[has_pct, col] = status.loc[has_pct]
+    return df
+
+
 def build_project_charts(df):
     charts = {}
     if df.empty:
@@ -846,6 +877,7 @@ def index():
     # that client.
     if filters["clients"] and "Client" in project_df.columns:
         project_df = project_df[project_df["Client"].isin(filters["clients"])]
+    project_df = recompute_status_from_percentage(project_df)
     project_df = recompute_overall_progress(project_df)
     has_project = not project_df.empty
 

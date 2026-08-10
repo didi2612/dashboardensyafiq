@@ -264,6 +264,21 @@ body::after{
   color:var(--accent);font-weight:700;text-decoration:none;cursor:pointer;
 }
 .client-link:hover{text-decoration:underline}
+
+/* ---------- End Date corner banner (Overall Client tab) ---------- */
+.end-date-cell{position:relative}
+.end-date-badge{
+  position:absolute;top:2px;right:2px;padding:1px 6px;border-radius:4px;
+  font-size:0.62rem;font-weight:800;letter-spacing:0.3px;text-transform:uppercase;
+  line-height:1.5;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,0.25);
+  animation:endDateBadgeIn 0.35s ease-out;
+}
+.end-date-badge.due-soon{background:#f5c518;color:#5c4600}
+.end-date-badge.overdue{background:#e0392c;color:#fff}
+@keyframes endDateBadgeIn{
+  0%{opacity:0;transform:translateY(-4px) scale(0.85)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
+}
 .client-table:not(.edit-mode) tbody tr,
 #client-table:not(.edit-mode) tbody tr{cursor:pointer}
 .client-table:not(.edit-mode) tbody tr:hover,
@@ -1101,6 +1116,8 @@ body.role-admin .viewer-only-note{display:none}
               <td class="editable-cell client-cell" data-col="{{ key }}" data-client="{{ display_val }}" data-status="{{ status }}">
                 <span class="client-link">{{ display_val }}</span>
               </td>
+              {% elif key == 'End Date' and display_val %}
+              <td class="editable-cell end-date-cell" data-col="{{ key }}">{{ display_val }}</td>
               {% else %}
               <td class="editable-cell" data-col="{{ key }}">{{ display_val }}</td>
               {% endif %}
@@ -1138,6 +1155,8 @@ body.role-admin .viewer-only-note{display:none}
               <td class="editable-cell client-cell" data-col="{{ key }}" data-client="{{ display_val }}" data-status="{{ row.get('Projek Status', '') }}">
                 <span class="client-link">{{ display_val }}</span>
               </td>
+              {% elif key == 'End Date' and display_val %}
+              <td class="editable-cell end-date-cell" data-col="{{ key }}">{{ display_val }}</td>
               {% else %}
               <td class="editable-cell" data-col="{{ key }}">{{ display_val }}</td>
               {% endif %}
@@ -1454,6 +1473,41 @@ function toggleSidebar() {
     if (sb) sb.classList.add('collapsed');
   });
 })();
+/* ---------- End Date corner banner (Overall Client tab) ----------
+   Flags rows whose End Date is within the next 7 days (yellow "Due Soon")
+   or already in the past (red "Overdue"). Runs after render since the
+   dates are baked into the table as plain dd/mm/yyyy text server-side. */
+function applyEndDateBadges() {
+  var cells = document.querySelectorAll('.end-date-cell');
+  if (!cells.length) return;
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var SOON_DAYS = 7;
+  cells.forEach(function(cell) {
+    var existing = cell.querySelector('.end-date-badge');
+    if (existing) existing.remove();
+    if (cell.querySelector('input')) return;
+    var text = cell.textContent.trim();
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+    if (!m) return;
+    var due = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+    if (isNaN(due.getTime())) return;
+    var diffDays = Math.round((due - today) / 86400000);
+    var badge = document.createElement('span');
+    if (diffDays < 0) {
+      badge.className = 'end-date-badge overdue';
+      badge.textContent = 'Expired';
+    } else if (diffDays <= SOON_DAYS) {
+      badge.className = 'end-date-badge due-soon';
+      badge.textContent = 'Due Soon';
+    } else {
+      return;
+    }
+    cell.appendChild(badge);
+  });
+}
+document.addEventListener('DOMContentLoaded', applyEndDateBadges);
+
 function selectClient(name, category) {
   // Entering (or leaving) a client's page always drops any leftover
   // Priority/Status/Task Type/date/search filter from the Overall Client
@@ -1689,6 +1743,7 @@ function makeEditableMulti(tableClass, saveBtnId, cancelBtnId, editBtnId, tabId)
     getTables().forEach(function(t) {
       t.classList.toggle('edit-mode', editMode);
       if (editMode) {
+        t.querySelectorAll('.end-date-badge').forEach(function(b) { b.remove(); });
         t.querySelectorAll('td.editable-cell').forEach(function(cell) {
           cell.innerHTML = buildEditableCellInput(cell);
           var inp = cell.querySelector('input');
@@ -1702,6 +1757,7 @@ function makeEditableMulti(tableClass, saveBtnId, cancelBtnId, editBtnId, tabId)
         });
       }
     });
+    if (!editMode) applyEndDateBadges();
   }
 
   function save() {

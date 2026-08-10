@@ -187,7 +187,7 @@ def build_warranty_charts(df):
         fig = px.bar(tc, x="Task Type", y="Count", title="Warranty Tickets by Task Type",
                       color="Task Type", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-        charts["task_type_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["task_type_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Project" in warranty_df.columns:
         pc = warranty_df["Project"].value_counts().reset_index()
@@ -195,7 +195,7 @@ def build_warranty_charts(df):
         fig = px.bar(pc, x="Project", y="Count", title="Warranty Tickets by Project",
                       color="Project", text="Count")
         fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False, xaxis_tickangle=-45)
-        charts["project_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+        charts["project_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     display_cols = ["Ticket No", "Task Type", "Project", "Company", "Ticket Title", "Priority", "Ticket Status", "Ticket Created Date", "Days"]
     avail = [c for c in display_cols if c in warranty_df.columns]
@@ -297,7 +297,7 @@ def build_project_charts(df):
             fig = px.bar(cc, x="Client", y="Count", title="Projects by Client",
                           color="Client", text="Count")
             fig.update_layout(template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#374151"), showlegend=False)
-            charts["client_bar"] = fig.to_html(full_html=False, config={"displayModeBar": False})
+            charts["client_bar"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})
 
     if "Status Progress" in df.columns:
         valid_status = df.dropna(subset=["Status Progress"])

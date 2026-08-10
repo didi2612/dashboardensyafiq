@@ -77,6 +77,7 @@ pio.templates.default = "plotly_white"
 
 TICKET_DB_COL_BY_DISPLAY = {display: col for display, col in db.TICKET_DB_COLUMNS}
 CLIENT_DB_COL_BY_DISPLAY = {display: col for display, col in db.CLIENT_DB_COLUMNS}
+PROJECT_DB_COL_BY_DISPLAY = {display: col for display, col in db.PROJECT_DB_COLUMNS}
 
 _schema_ready = False
 
@@ -1187,6 +1188,16 @@ def api_save():
             return {"success": False, "error": f"Column not editable: {column}"}
         try:
             db.update_client_field(int(row_idx), db_column, value, conn=request_conn())
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    if sheet == "Client Project":
+        db_column = PROJECT_DB_COL_BY_DISPLAY.get(column)
+        if not db_column:
+            return {"success": False, "error": f"Column not editable: {column}"}
+        try:
+            db.update_project_field(int(row_idx), db_column, value, conn=request_conn())
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}

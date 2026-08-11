@@ -324,6 +324,30 @@ def recompute_status_from_percentage(df):
     return df
 
 
+def recompute_duration(df):
+    """Duration is derived, not typed -- Start date through Due date,
+    inclusive of both ends, with Saturdays not counted (so a 7-day
+    calendar week is 6 days of duration). Recomputed on every load so
+    editing either date always keeps Duration in sync, the same way
+    Status Progress stays in sync with Percentage.
+    """
+    if df.empty or not {"Start date", "Due date"}.issubset(df.columns):
+        return df
+
+    df = df.copy()
+
+    def duration_for(row):
+        start, end = row["Start date"], row["Due date"]
+        if pd.isna(start) or pd.isna(end) or end < start:
+            return None
+        days = (end - start).days + 1
+        saturdays = sum(1 for i in range(days) if (start + pd.Timedelta(days=i)).weekday() == 5)
+        return f"{days - saturdays} days"
+
+    df["Duration"] = df.apply(duration_for, axis=1)
+    return df
+
+
 def build_project_charts(df):
     charts = {}
     if df.empty:
@@ -963,6 +987,7 @@ def build_tab_context(idx, filters, filter_options, df=None):
                 project_df = narrowed
         project_df = recompute_status_from_percentage(project_df)
         project_df = recompute_overall_progress(project_df)
+        project_df = recompute_duration(project_df)
         has_project = not project_df.empty
         project_charts = build_project_charts(project_df) if has_project else {}
         return "tabs/tab_3.html", {**common, "has_project": has_project, "project_charts": project_charts}

@@ -42,6 +42,13 @@ app.secret_key = os.environ.get("SECRET_KEY", "sw-dashboard-session-signing-key-
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
+# Vercel sets this automatically on every deploy -- using it as the
+# service worker's cache-name/version means sw.js's bytes (and therefore
+# its cache) change on every deploy without anyone having to remember to
+# bump a version number by hand. Locally (no Vercel env) it falls back to
+# "dev", which is fine since local restarts don't need cache-busting.
+SW_VERSION = os.environ.get("VERCEL_GIT_COMMIT_SHA", "dev")[:12]
+
 
 @app.route("/sw.svg")
 def brand_watermark():
@@ -56,8 +63,12 @@ def pwa_manifest():
 @app.route("/sw.js")
 def pwa_service_worker():
     # Served from the root path (not /static/sw.js) so its default scope
-    # covers the whole origin instead of just /static/.
-    return send_from_directory(PROJECT_ROOT, "sw.js", mimetype="application/javascript")
+    # covers the whole origin instead of just /static/. Templated (not
+    # send_from_directory) so __SW_VERSION__ can be swapped for the
+    # current deploy's commit SHA -- see SW_VERSION above.
+    with open(os.path.join(PROJECT_ROOT, "sw.js"), "r", encoding="utf-8") as f:
+        content = f.read().replace("__SW_VERSION__", SW_VERSION)
+    return content, 200, {"Content-Type": "application/javascript", "Cache-Control": "no-cache"}
 
 
 @app.route("/static/<path:filename>")
@@ -74,6 +85,16 @@ log("Dashboard starting (Flask + Neon Postgres)")
 log(f"Python: {sys.version}")
 
 pio.templates.default = "plotly_white"
+# Every chart in this app uses template="plotly_white" explicitly, so
+# pinning the hover box style here fixes it everywhere at once. Without
+# this, some browsers' "force dark mode for websites" auto-darkening
+# (this site never declares a color-scheme, so it's a candidate for
+# that heuristic) can darken the hover box background while Plotly's
+# own inline SVG text fill stays dark too, leaving dark text on a dark
+# box. Pinning both explicitly guarantees readable contrast regardless.
+pio.templates["plotly_white"].layout.hoverlabel = dict(
+    bgcolor="white", bordercolor="#d0d5dd", font=dict(color="#1f2937", size=12),
+)
 
 TICKET_DB_COL_BY_DISPLAY = {display: col for display, col in db.TICKET_DB_COLUMNS}
 CLIENT_DB_COL_BY_DISPLAY = {display: col for display, col in db.CLIENT_DB_COLUMNS}

@@ -1331,5 +1331,37 @@ def api_save():
         return {"success": False, "error": str(e)}
 
 
+@app.route("/api/add_row", methods=["POST"])
+def api_add_row():
+    if not require_admin():
+        return jsonify({"success": False, "error": "Admin login required"}), 403
+    data = request.get_json()
+    table = data.get("table")
+    values = data.get("values") or {}
+
+    col_by_display, insert_fn = {
+        "clients": (CLIENT_DB_COL_BY_DISPLAY, db.insert_client_row),
+        "projects": (PROJECT_DB_COL_BY_DISPLAY, db.insert_project_row),
+        "tickets": (TICKET_DB_COL_BY_DISPLAY, db.insert_ticket_row),
+    }.get(table, (None, None))
+    if not insert_fn:
+        return jsonify({"success": False, "error": f"Unknown table: {table}"}), 400
+
+    db_values = {}
+    for display, val in values.items():
+        db_col = col_by_display.get(display)
+        if not db_col:
+            return jsonify({"success": False, "error": f"Column not editable: {display}"}), 400
+        db_values[db_col] = val
+
+    try:
+        new_id = insert_fn(db_values, conn=request_conn())
+        return jsonify({"success": True, "row_idx": new_id})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=8501)

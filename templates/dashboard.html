@@ -1017,7 +1017,7 @@ function toggleSidebar() {
   });
 })();
 /* ---------- End Date corner banner (Overall Client tab) ----------
-   Flags rows whose End Date is within the next 7 days (yellow "Due Soon")
+   Flags rows whose End Date is within the next month (yellow "Due Soon")
    or already in the past (red "Overdue"). Runs after render since the
    dates are baked into the table as plain dd/mm/yyyy text server-side. */
 function applyEndDateBadges() {
@@ -1025,7 +1025,7 @@ function applyEndDateBadges() {
   if (!cells.length) return;
   var today = new Date();
   today.setHours(0, 0, 0, 0);
-  var SOON_DAYS = 7;
+  var SOON_DAYS = 30;
   cells.forEach(function(cell) {
     var existing = cell.querySelector('.end-date-badge');
     if (existing) existing.remove();

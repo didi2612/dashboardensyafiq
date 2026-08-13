@@ -444,7 +444,11 @@ def build_project_charts(df):
                         if not rdf.empty:
                             fig.add_trace(go.Bar(
                                 base=rdf["Start date"],
-                                x=(rdf["Due date"] - rdf["Start date"]),
+                                # A raw pandas Timedelta isn't JSON-serializable
+                                # in every Plotly version -- milliseconds (a
+                                # plain float) is how Plotly represents a bar's
+                                # width on a date axis internally either way.
+                                x=(rdf["Due date"] - rdf["Start date"]).dt.total_seconds() * 1000,
                                 y=rdf["Row Label"], orientation="h",
                                 name=val, legendgroup=val, marker_color=color_map[val],
                                 customdata=rdf[["Start date", "Due date"]].astype(str),

@@ -446,9 +446,19 @@ def build_project_charts(df):
                     fig.update_layout(
                         template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                         font=dict(color="#374151"),
-                        # Category legend is informative; Task Label would
-                        # just repeat what's already on the y-axis.
-                        showlegend=(color_col == "Category"),
+                        # Always show what each color means -- previously
+                        # only shown for Category coloring, on the theory
+                        # that Task Label coloring just repeats the y-axis
+                        # row labels; but the color itself still isn't
+                        # decodable without hovering unless the legend is
+                        # there too. Placed to the left, alongside the
+                        # y-axis, instead of Plotly's floating default.
+                        showlegend=True,
+                        legend=dict(
+                            orientation="v", x=-0.35, xanchor="left", y=1, yanchor="top",
+                            title=dict(text=color_col),
+                        ),
+                        margin=dict(l=180),
                         height=max(200, 30*len(cdf)),
                     )
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'

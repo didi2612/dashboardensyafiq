@@ -464,9 +464,18 @@ def build_project_charts(df):
                     # axis, scaled to this client's own chart span -- this
                     # doesn't invent a date range that never existed, it
                     # just guarantees a short-but-real one doesn't round
-                    # down to invisible.
+                    # down to invisible. Capped at 2 days: uncapped, this
+                    # scaled with the *whole chart's* span (which can be
+                    # dominated by an unrelated multi-year task elsewhere
+                    # in the same client), so on a wide enough chart a
+                    # boosted 1-day task could stretch past a genuine,
+                    # unboosted 3-4 day task and visually look longer than
+                    # something that actually took more real time -- capping
+                    # at 2 days keeps it strictly below the >2-day tier that
+                    # never gets boosted, so relative ordering is never
+                    # inverted by the correction meant to just aid visibility.
                     span_days = max((cdf["Chart Due"].max() - cdf["Start date"].min()).days, 1)
-                    min_bar_ms = max(1, round(span_days * 0.015)) * 86400000
+                    min_bar_ms = min(max(1, round(span_days * 0.015)), 2) * 86400000
 
                     fig = go.Figure()
                     for val in color_values:

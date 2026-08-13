@@ -392,6 +392,14 @@ def build_project_charts(df):
             valid["Task Label"] = valid["Task Label"].str.split("\n").str[0].str.strip()
         else:
             valid["Task Label"] = valid["Title"].astype(str)
+        # A single-day milestone (Start date == Due date, e.g. "Go Live")
+        # renders as a zero-width bar -- invisible next to a task that
+        # actually spans time. Give the chart (only the chart; the real
+        # Due date/Duration elsewhere are untouched) a minimum 1-day span
+        # so every task shows up as an actual visible marker.
+        valid["Chart End"] = valid["Due date"]
+        same_day = valid["Start date"] == valid["Due date"]
+        valid.loc[same_day, "Chart End"] = valid.loc[same_day, "Due date"] + pd.Timedelta(days=1)
         if not valid.empty:
             timeline_charts_html = ""
             if "Client" in valid.columns:
@@ -399,9 +407,19 @@ def build_project_charts(df):
                     cdf = valid[valid["Client"] == client]
                     if cdf.empty:
                         continue
+                    # Coloring by Client here was a no-op -- every row in
+                    # cdf already shares the same Client, so every bar came
+                    # out one uniform color. Color by Category instead so
+                    # different kinds of work are visually distinguishable;
+                    # but if this client's tasks are all the same Category
+                    # too (equally uniform, equally uninformative), color
+                    # by the task itself (Task Label, from Description) so
+                    # each bar in the timeline still reads as distinct.
+                    categories = cdf["Category"].dropna().unique() if "Category" in cdf.columns else []
+                    color_col = "Category" if len(categories) > 1 else "Task Label"
                     fig = px.timeline(
-                        cdf, x_start="Start date", x_end="Due date",
-                        y="Task Label", color="Client",
+                        cdf, x_start="Start date", x_end="Chart End",
+                        y="Task Label", color=color_col,
                         title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
                         color_discrete_sequence=px.colors.qualitative.Plotly,
                     )
@@ -409,7 +427,10 @@ def build_project_charts(df):
                     fig.update_xaxes(title="Tarikh")
                     fig.update_layout(
                         template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#374151"), showlegend=False,
+                        font=dict(color="#374151"),
+                        # Category legend is informative; Task Label would
+                        # just repeat what's already on the y-axis.
+                        showlegend=(color_col == "Category"),
                         height=max(200, 30*len(cdf)),
                     )
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'

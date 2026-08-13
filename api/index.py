@@ -411,20 +411,6 @@ def build_project_charts(df):
                     cdf = valid[valid["Client"] == client].copy()
                     if cdf.empty:
                         continue
-                    # A single-day milestone (Start date == Due date, e.g.
-                    # "Go Live") renders as a zero-width bar. A fixed 1-day
-                    # minimum isn't enough to make it visible -- e.g. on a
-                    # 2-year-wide chart, 1 day is ~0.1% of the width, still
-                    # an invisible hairline. Scale the minimum to this
-                    # client's own chart span (2%, floor 1 day) instead so
-                    # milestones are an actually-visible marker regardless
-                    # of how long the overall timeline is. Only affects the
-                    # chart; the real Due date/Duration elsewhere untouched.
-                    span_days = max((cdf["Due date"].max() - cdf["Start date"].min()).days, 1)
-                    min_width = pd.Timedelta(days=max(1, round(span_days * 0.02)))
-                    cdf["Chart End"] = cdf["Due date"]
-                    same_day = cdf["Start date"] == cdf["Due date"]
-                    cdf.loc[same_day, "Chart End"] = cdf.loc[same_day, "Due date"] + min_width
                     # Coloring by Client here was a no-op -- every row in
                     # cdf already shares the same Client, so every bar came
                     # out one uniform color. Color by Category instead so
@@ -435,30 +421,51 @@ def build_project_charts(df):
                     # each bar in the timeline still reads as distinct.
                     categories = cdf["Category"].dropna().unique() if "Category" in cdf.columns else []
                     color_col = "Category" if len(categories) > 1 else "Task Label"
-                    fig = px.timeline(
-                        cdf, x_start="Start date", x_end="Chart End",
-                        y="Row Label", color=color_col,
-                        title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
-                        color_discrete_sequence=px.colors.qualitative.Plotly,
-                    )
+                    color_values = sorted(cdf[color_col].dropna().astype(str).unique().tolist())
+                    palette = px.colors.qualitative.Plotly
+                    color_map = {val: palette[i % len(palette)] for i, val in enumerate(color_values)}
+
+                    # A single-day milestone (Start date == Due date, e.g.
+                    # "Go Live") has zero width as a bar -- stretching its
+                    # end date to make it visible (an earlier attempt) drew
+                    # it as if it actually spanned days or weeks it never
+                    # did, which is just wrong, not merely a cosmetic
+                    # compromise. Real Gantt tools handle this by drawing
+                    # milestones as fixed-size marker points instead of
+                    # bars: a marker's size is in pixels, not date units,
+                    # so it's visible at any chart scale without touching
+                    # the real date it's plotted at.
+                    ranged = cdf[cdf["Start date"] != cdf["Due date"]]
+                    milestones = cdf[cdf["Start date"] == cdf["Due date"]]
+
+                    fig = go.Figure()
+                    for val in color_values:
+                        rdf = ranged[ranged[color_col].astype(str) == val]
+                        if not rdf.empty:
+                            fig.add_trace(go.Bar(
+                                base=rdf["Start date"],
+                                x=(rdf["Due date"] - rdf["Start date"]),
+                                y=rdf["Row Label"], orientation="h",
+                                name=val, legendgroup=val, marker_color=color_map[val],
+                                customdata=rdf[["Start date", "Due date"]].astype(str),
+                                hovertemplate="Row=%{y}<br>Start=%{customdata[0]}<br>Due=%{customdata[1]}<extra></extra>",
+                            ))
+                        mdf = milestones[milestones[color_col].astype(str) == val]
+                        if not mdf.empty:
+                            fig.add_trace(go.Scatter(
+                                x=mdf["Start date"], y=mdf["Row Label"], mode="markers",
+                                marker=dict(symbol="diamond", size=12, color=color_map[val], line=dict(width=1, color="#374151")),
+                                name=val, legendgroup=val, showlegend=rdf.empty,
+                                customdata=mdf[["Start date"]].astype(str),
+                                hovertemplate="Row=%{y}<br>Date=%{customdata[0]}<extra></extra>",
+                            ))
+
                     fig.update_yaxes(autorange="reversed", title=None)
-                    fig.update_xaxes(title="Tarikh")
+                    fig.update_xaxes(title="Tarikh", type="date")
                     fig.update_layout(
                         template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#374151"),
-                        # Always show what each color means -- previously
-                        # only shown for Category coloring, on the theory
-                        # that Task Label coloring just repeats the y-axis
-                        # row labels; but the color itself still isn't
-                        # decodable without hovering unless the legend is
-                        # there too. Placed to the left, alongside the
-                        # y-axis, instead of Plotly's floating default.
-                        showlegend=True,
-                        legend=dict(
-                            orientation="v", x=-0.35, xanchor="left", y=1, yanchor="top",
-                            title=dict(text=color_col),
-                        ),
-                        margin=dict(l=180),
+                        font=dict(color="#374151"), title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
+                        legend=dict(title=dict(text=color_col)),
                         height=max(200, 30*len(cdf)),
                     )
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'

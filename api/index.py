@@ -422,7 +422,14 @@ def build_project_charts(df):
                     # construction) and only use Row Label as the tick text
                     # shown at that position -- so two rows with identical
                     # text still each get their own line.
-                    cdf = cdf.sort_values(["Row Label", "Start date"]).reset_index(drop=True)
+                    #
+                    # Preserve cdf's incoming order rather than re-sorting
+                    # it (previously by Row Label/Start date) so the chart's
+                    # row order matches the Project Details table's row
+                    # order -- both ultimately come from the same
+                    # project_df, fetched `ORDER BY id`, so as long as
+                    # neither re-sorts they stay in the same sequence.
+                    cdf = cdf.reset_index(drop=True)
                     cdf["Y Pos"] = cdf.index
                     # Coloring by Client here was a no-op -- every row in
                     # cdf already shares the same Client, so every bar came

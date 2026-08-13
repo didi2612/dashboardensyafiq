@@ -411,6 +411,19 @@ def build_project_charts(df):
                     cdf = valid[valid["Client"] == client].copy()
                     if cdf.empty:
                         continue
+                    # Row Label (Project: Task) usually gives each task its
+                    # own row, but a project can legitimately have two rows
+                    # with the exact same description (a generic recurring
+                    # checklist item like "Sign-off", or two "UAT" rounds) --
+                    # a *shared string* y-axis category collapses those onto
+                    # one line no matter how the string is built. Give every
+                    # row its own guaranteed-unique numeric position instead
+                    # (one row of cdf = one position, always, by
+                    # construction) and only use Row Label as the tick text
+                    # shown at that position -- so two rows with identical
+                    # text still each get their own line.
+                    cdf = cdf.sort_values(["Row Label", "Start date"]).reset_index(drop=True)
+                    cdf["Y Pos"] = cdf.index
                     # Coloring by Client here was a no-op -- every row in
                     # cdf already shares the same Client, so every bar came
                     # out one uniform color. Color by Category instead so
@@ -449,30 +462,39 @@ def build_project_charts(df):
                                 # plain float) is how Plotly represents a bar's
                                 # width on a date axis internally either way.
                                 x=(rdf["Due date"] - rdf["Start date"]).dt.total_seconds() * 1000,
-                                y=rdf["Row Label"], orientation="h",
+                                y=rdf["Y Pos"], orientation="h", width=0.6,
                                 name=val, legendgroup=val, marker_color=color_map[val],
-                                customdata=rdf[["Start date", "Due date"]].astype(str),
-                                hovertemplate="Row=%{y}<br>Start=%{customdata[0]}<br>Due=%{customdata[1]}<extra></extra>",
+                                customdata=rdf[["Row Label", "Start date", "Due date"]].astype(str),
+                                hovertemplate="Row=%{customdata[0]}<br>Start=%{customdata[1]}<br>Due=%{customdata[2]}<extra></extra>",
                             ))
                         mdf = milestones[milestones[color_col].astype(str) == val]
                         if not mdf.empty:
                             fig.add_trace(go.Scatter(
-                                x=mdf["Start date"], y=mdf["Row Label"], mode="markers",
+                                x=mdf["Start date"], y=mdf["Y Pos"], mode="markers",
                                 marker=dict(symbol="diamond", size=12, color=color_map[val], line=dict(width=1, color="#374151")),
                                 name=val, legendgroup=val, showlegend=rdf.empty,
-                                customdata=mdf[["Start date"]].astype(str),
-                                hovertemplate="Row=%{y}<br>Date=%{customdata[0]}<extra></extra>",
+                                customdata=mdf[["Row Label", "Start date"]].astype(str),
+                                hovertemplate="Row=%{customdata[0]}<br>Date=%{customdata[1]}<extra></extra>",
                             ))
 
-                    fig.update_yaxes(autorange="reversed", title=None)
+                    # tickvals/ticktext (not a categorical axis) is what
+                    # lets the same description repeat as text on two
+                    # different rows without Plotly merging them back down
+                    # to one category. margin (row spacing) comes from bar
+                    # width=0.6 above, leaving 40% of each row's slot empty.
+                    fig.update_yaxes(
+                        autorange="reversed", title=None,
+                        tickmode="array", tickvals=cdf["Y Pos"], ticktext=cdf["Row Label"],
+                    )
                     fig.update_xaxes(title="Tarikh", type="date")
                     fig.update_layout(
                         template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                         font=dict(color="#374151"), title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
                         legend=dict(title=dict(text=color_col)),
-                        height=max(200, 30*len(cdf)),
+                        height=max(220, 42*len(cdf)),
+                        margin=dict(l=220),
                     )
-                    timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False})}</div>'
+                    timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False, "responsive": True})}</div>'
             charts["timeline_chart"] = timeline_charts_html
 
     display_cols_p = ["Client", "Title", "Projek Name", "Description", "Category", "Progress", "Priority", "Start date", "Due date", "Target Date", "Duration", "Assigned to", "Status Progress", "Percentage", "Overall Progress Task (%)"]

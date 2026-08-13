@@ -490,7 +490,10 @@ def build_project_charts(df):
                     fig.update_layout(
                         template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                         font=dict(color="#374151"), title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
-                        legend=dict(title=dict(text=color_col)),
+                        # Y-axis already shows the plain task name and
+                        # hovering shows the full project+task+dates, so
+                        # the color-key legend is redundant screen space.
+                        showlegend=False,
                         height=max(220, 42*len(cdf)),
                         margin=dict(l=140),
                     )

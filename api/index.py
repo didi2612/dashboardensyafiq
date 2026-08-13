@@ -392,14 +392,6 @@ def build_project_charts(df):
             valid["Task Label"] = valid["Task Label"].str.split("\n").str[0].str.strip()
         else:
             valid["Task Label"] = valid["Title"].astype(str)
-        # A single-day milestone (Start date == Due date, e.g. "Go Live")
-        # renders as a zero-width bar -- invisible next to a task that
-        # actually spans time. Give the chart (only the chart; the real
-        # Due date/Duration elsewhere are untouched) a minimum 1-day span
-        # so every task shows up as an actual visible marker.
-        valid["Chart End"] = valid["Due date"]
-        same_day = valid["Start date"] == valid["Due date"]
-        valid.loc[same_day, "Chart End"] = valid.loc[same_day, "Due date"] + pd.Timedelta(days=1)
         # A client can have more than one project (e.g. MYCLAIM MARA and
         # MYOT MARA both under MARA), and both commonly reuse the exact
         # same task names (Development/UAT/Go Live/...). Row identity by
@@ -416,9 +408,23 @@ def build_project_charts(df):
             timeline_charts_html = ""
             if "Client" in valid.columns:
                 for client in sorted(valid["Client"].dropna().unique()):
-                    cdf = valid[valid["Client"] == client]
+                    cdf = valid[valid["Client"] == client].copy()
                     if cdf.empty:
                         continue
+                    # A single-day milestone (Start date == Due date, e.g.
+                    # "Go Live") renders as a zero-width bar. A fixed 1-day
+                    # minimum isn't enough to make it visible -- e.g. on a
+                    # 2-year-wide chart, 1 day is ~0.1% of the width, still
+                    # an invisible hairline. Scale the minimum to this
+                    # client's own chart span (2%, floor 1 day) instead so
+                    # milestones are an actually-visible marker regardless
+                    # of how long the overall timeline is. Only affects the
+                    # chart; the real Due date/Duration elsewhere untouched.
+                    span_days = max((cdf["Due date"].max() - cdf["Start date"].min()).days, 1)
+                    min_width = pd.Timedelta(days=max(1, round(span_days * 0.02)))
+                    cdf["Chart End"] = cdf["Due date"]
+                    same_day = cdf["Start date"] == cdf["Due date"]
+                    cdf.loc[same_day, "Chart End"] = cdf.loc[same_day, "Due date"] + min_width
                     # Coloring by Client here was a no-op -- every row in
                     # cdf already shares the same Client, so every bar came
                     # out one uniform color. Color by Category instead so

@@ -400,6 +400,18 @@ def build_project_charts(df):
         valid["Chart End"] = valid["Due date"]
         same_day = valid["Start date"] == valid["Due date"]
         valid.loc[same_day, "Chart End"] = valid.loc[same_day, "Due date"] + pd.Timedelta(days=1)
+        # A client can have more than one project (e.g. MYCLAIM MARA and
+        # MYOT MARA both under MARA), and both commonly reuse the exact
+        # same task names (Development/UAT/Go Live/...). Row identity by
+        # Task Label alone collapsed those onto the same y-axis row, so
+        # whichever bar happened to overlap in time visually covered the
+        # other one up entirely -- e.g. MyOT's "Go Live" bar hid MyClaim's
+        # own Development/UAT/Go Live bars underneath it. Scope each row to
+        # its own project (Projek Name, falling back to Title) plus task
+        # name so same-named tasks from different projects always get
+        # their own row and are never drawn on top of each other.
+        project_key = valid["Projek Name"].where(valid["Projek Name"].astype(str).str.strip().ne(""), valid["Title"]) if "Projek Name" in valid.columns else valid["Title"]
+        valid["Row Label"] = project_key.astype(str) + ": " + valid["Task Label"]
         if not valid.empty:
             timeline_charts_html = ""
             if "Client" in valid.columns:
@@ -419,7 +431,7 @@ def build_project_charts(df):
                     color_col = "Category" if len(categories) > 1 else "Task Label"
                     fig = px.timeline(
                         cdf, x_start="Start date", x_end="Chart End",
-                        y="Task Label", color=color_col,
+                        y="Row Label", color=color_col,
                         title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
                         color_discrete_sequence=px.colors.qualitative.Plotly,
                     )

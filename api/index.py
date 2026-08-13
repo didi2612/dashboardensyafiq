@@ -462,6 +462,16 @@ def build_project_charts(df):
                     for val in color_values:
                         rdf = ranged[ranged[color_col].astype(str) == val]
                         if not rdf.empty:
+                            # A 1-2 day bar is already about as short as a
+                            # bar gets horizontally (it can't be widened
+                            # along the date axis without misrepresenting
+                            # its real duration, same reasoning as the
+                            # milestone markers). Make it visually stand
+                            # out with extra vertical thickness instead --
+                            # `width` accepts one value per row, not just a
+                            # single scalar for the whole trace.
+                            bar_days = (rdf["Due date"] - rdf["Start date"]).dt.days
+                            bar_widths = bar_days.apply(lambda d: 0.85 if d <= 2 else 0.65)
                             fig.add_trace(go.Bar(
                                 base=rdf["Start date"],
                                 # A raw pandas Timedelta isn't JSON-serializable
@@ -469,7 +479,7 @@ def build_project_charts(df):
                                 # plain float) is how Plotly represents a bar's
                                 # width on a date axis internally either way.
                                 x=(rdf["Due date"] - rdf["Start date"]).dt.total_seconds() * 1000,
-                                y=rdf["Y Pos"], orientation="h", width=0.65,
+                                y=rdf["Y Pos"], orientation="h", width=bar_widths.tolist(),
                                 name=val, legendgroup=val, marker_color=color_map[val],
                                 customdata=rdf[["Row Label", "Start date", "Due date"]].astype(str),
                                 hovertemplate="Row=%{customdata[0]}<br>Start=%{customdata[1]}<br>Due=%{customdata[2]}<extra></extra>",

@@ -484,7 +484,7 @@ def build_project_charts(df):
                     # width=0.6 above, leaving 40% of each row's slot empty.
                     fig.update_yaxes(
                         autorange="reversed", title=None,
-                        tickmode="array", tickvals=cdf["Y Pos"], ticktext=cdf["Row Label"],
+                        tickmode="array", tickvals=cdf["Y Pos"], ticktext=cdf["Task Label"],
                     )
                     fig.update_xaxes(title="Tarikh", type="date")
                     fig.update_layout(
@@ -492,7 +492,7 @@ def build_project_charts(df):
                         font=dict(color="#374151"), title=f"{client} - PROJECT DEVELOPMENT TIMELINE",
                         legend=dict(title=dict(text=color_col)),
                         height=max(220, 42*len(cdf)),
-                        margin=dict(l=220),
+                        margin=dict(l=140),
                     )
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False, "responsive": True})}</div>'
             charts["timeline_chart"] = timeline_charts_html

@@ -469,7 +469,7 @@ def build_project_charts(df):
                                 # plain float) is how Plotly represents a bar's
                                 # width on a date axis internally either way.
                                 x=(rdf["Due date"] - rdf["Start date"]).dt.total_seconds() * 1000,
-                                y=rdf["Y Pos"], orientation="h", width=0.6,
+                                y=rdf["Y Pos"], orientation="h", width=0.65,
                                 name=val, legendgroup=val, marker_color=color_map[val],
                                 customdata=rdf[["Row Label", "Start date", "Due date"]].astype(str),
                                 hovertemplate="Row=%{customdata[0]}<br>Start=%{customdata[1]}<br>Due=%{customdata[2]}<extra></extra>",
@@ -478,7 +478,7 @@ def build_project_charts(df):
                         if not mdf.empty:
                             fig.add_trace(go.Scatter(
                                 x=mdf["Start date"], y=mdf["Y Pos"], mode="markers",
-                                marker=dict(symbol="diamond", size=12, color=color_map[val], line=dict(width=1, color="#374151")),
+                                marker=dict(symbol="diamond", size=16, color=color_map[val], line=dict(width=1, color="#374151")),
                                 name=val, legendgroup=val, showlegend=rdf.empty,
                                 customdata=mdf[["Row Label", "Start date"]].astype(str),
                                 hovertemplate="Row=%{customdata[0]}<br>Date=%{customdata[1]}<extra></extra>",
@@ -488,7 +488,7 @@ def build_project_charts(df):
                     # lets the same description repeat as text on two
                     # different rows without Plotly merging them back down
                     # to one category. margin (row spacing) comes from bar
-                    # width=0.6 above, leaving 40% of each row's slot empty.
+                    # width=0.65 above, leaving ~35% of each row's slot empty.
                     fig.update_yaxes(
                         autorange="reversed", title=None,
                         tickmode="array", tickvals=cdf["Y Pos"], ticktext=cdf["Task Label"],
@@ -501,8 +501,9 @@ def build_project_charts(df):
                         # hovering shows the full project+task+dates, so
                         # the color-key legend is redundant screen space.
                         showlegend=False,
-                        height=max(220, 42*len(cdf)),
-                        margin=dict(l=140),
+                        height=max(320, 60*len(cdf)),
+                        margin=dict(l=160),
+                        font_size=13,
                     )
                     timeline_charts_html += f'<div class="client-section"><h4>{client}</h4>{fig.to_html(full_html=False, include_plotlyjs=False, config={"displayModeBar": False, "responsive": True})}</div>'
             charts["timeline_chart"] = timeline_charts_html

@@ -1932,6 +1932,111 @@ function pdfGanttTable(rows) {
   return out;
 }
 
+/* Task order for a flow chart -- by Target Start Date where present,
+   original (row) order otherwise, so undated tasks fall back to however
+   they were already listed instead of jumping around. */
+function taskFlowSortKey(t) {
+  var d = reportParseDate(t.target_start);
+  return d ? d.getTime() : Infinity;
+}
+
+/* Module titles and task descriptions in the source sheet often already
+   carry their own leading "1. " numbering -- flow-chart boxes add their
+   own sequence number on top, so strip any number the source data already
+   has first, otherwise a box reads "1. 1. Barkod" instead of "1. Barkod". */
+function stripLeadingNumber(s) {
+  return (s || '').replace(/^\d+\.\s*/, '');
+}
+
+/* Pale fill behind a flow-chart box, keyed to the same three completion
+   tiers as progressColor, so a box reads as "amber/blue/green" at a
+   glance without the border color alone having to carry it. */
+function progressTint(pct) {
+  if (pct >= 100) return '#e3f7ef';
+  if (pct >= 50) return '#e8f0f6';
+  return '#fbf1e3';
+}
+
+/* Small box-by-box flow diagram for the PDF report -- one box per node
+   (a task or a module, whichever the caller passes), wrapped `perRow` to
+   a line and connected left-to-right by a drawn arrow (line + triangle
+   head, not a font glyph, so it renders identically everywhere). When a
+   row wraps, a second down-arrow under the last box of that row shows the
+   sequence continuing into the next row, so a multi-row chart still reads
+   as one single flow rather than several disconnected strips. Kept
+   deliberately compact -- small boxes, small type -- rather than a full
+   diagramming-library flowchart. nodes is [{label, percent}], already in
+   display order. */
+function pdfFlowChart(nodes) {
+  var perRow = 5, boxW = 84, boxH = 36, arrowW = 20;
+  var out = [];
+  for (var i = 0; i < nodes.length; i += perRow) {
+    var chunk = nodes.slice(i, i + perRow);
+    var cols = [];
+    chunk.forEach(function(n, idx) {
+      var pct = n.percent != null ? n.percent : 0;
+      var color = progressColor(pct);
+      var label = n.label || '(untitled)';
+      if (label.length > 42) label = label.slice(0, 41) + '...';
+      cols.push({
+        width: boxW,
+        table: {
+          widths: ['*'],
+          heights: [boxH],
+          body: [[ {
+            text: [
+              { text: (i + idx + 1) + '. ', bold: true, fontSize: 7.5, color: color },
+              { text: label, fontSize: 7.5, color: '#1a1a1a' },
+              { text: '\n' + pct.toFixed(0) + '%', fontSize: 8, bold: true, color: color }
+            ],
+            fillColor: progressTint(pct),
+            alignment: 'center'
+          } ]]
+        },
+        layout: {
+          hLineWidth: function() { return 1.25; }, vLineWidth: function() { return 1.25; },
+          hLineColor: function() { return color; }, vLineColor: function() { return color; },
+          paddingLeft: function() { return 5; }, paddingRight: function() { return 5; },
+          paddingTop: function() { return 5; }, paddingBottom: function() { return 5; }
+        }
+      });
+      if (idx < chunk.length - 1) {
+        cols.push({
+          width: arrowW,
+          margin: [0, boxH / 2 - 4, 0, 0],
+          canvas: [
+            { type: 'line', x1: 0, y1: 4, x2: arrowW - 8, y2: 4, lineWidth: 1.5, lineColor: REPORT_BRAND.accent },
+            { type: 'polyline', lineWidth: 0, color: REPORT_BRAND.accent, closePath: true,
+              points: [{ x: arrowW - 10, y: 0 }, { x: arrowW - 2, y: 4 }, { x: arrowW - 10, y: 8 }] }
+          ]
+        });
+      }
+    });
+    out.push({ columns: cols, columnGap: 0, margin: [0, 0, 0, 6] });
+    // When a row wraps, the next row's first box starts back at the left
+    // margin, not directly under this row's last box -- so the connector
+    // has to drop, jog left, then drop again into that box, not just draw
+    // a straight line down (which would dangle on the right with nothing
+    // underneath it).
+    if (i + perRow < nodes.length) {
+      var lastBoxCenterX = (chunk.length - 1) * (boxW + arrowW) + boxW / 2;
+      var firstBoxCenterX = boxW / 2;
+      var connH = 18, midY = connH / 2;
+      out.push({
+        canvas: [
+          { type: 'line', x1: lastBoxCenterX, y1: 0, x2: lastBoxCenterX, y2: midY, lineWidth: 1.5, lineColor: REPORT_BRAND.accent },
+          { type: 'line', x1: lastBoxCenterX, y1: midY, x2: firstBoxCenterX, y2: midY, lineWidth: 1.5, lineColor: REPORT_BRAND.accent },
+          { type: 'line', x1: firstBoxCenterX, y1: midY, x2: firstBoxCenterX, y2: connH - 6, lineWidth: 1.5, lineColor: REPORT_BRAND.accent },
+          { type: 'polyline', lineWidth: 0, color: REPORT_BRAND.accent, closePath: true,
+            points: [{ x: firstBoxCenterX - 4, y: connH - 7 }, { x: firstBoxCenterX + 4, y: connH - 7 }, { x: firstBoxCenterX, y: connH }] }
+        ],
+        margin: [0, 0, 0, 6]
+      });
+    }
+  }
+  return out;
+}
+
 function loadImageDataUrl(url) {
   return fetch(url)
     .then(function(r) { return r.blob(); })
@@ -2078,6 +2183,19 @@ function buildProjectReportDoc(data, logoDataUrl) {
       content.push.apply(content, pdfGanttTable(taskRows));
     } else {
       content.push({ text: 'No Target Start/End Date data available for this module\'s tasks.', color: B.dim, margin: [0, 0, 0, 16] });
+    }
+  });
+
+  content.push({ text: 'Module Flow Charts', style: 'h1', pageBreak: 'before' });
+  content.push({ text: 'Task sequence per module, ordered by Target Start Date, each box colored by completion.', style: 'note', margin: [0, 0, 0, 8] });
+  (data.modules || []).forEach(function(m, mi) {
+    var flowNodes = (data.tasks || []).filter(function(t) { return t.title === m.title; }).slice().sort(function(a, b) { return taskFlowSortKey(a) - taskFlowSortKey(b); })
+      .map(function(t) { return { label: stripLeadingNumber(t.description) || '(untitled task)', percent: t.percentage != null ? t.percentage : 0 }; });
+    content.push({ text: m.title, style: 'h2', margin: [0, mi === 0 ? 0 : 16, 0, 6] });
+    if (flowNodes.length) {
+      content.push.apply(content, pdfFlowChart(flowNodes));
+    } else {
+      content.push({ text: 'No tasks recorded for this module.', color: B.dim, margin: [0, 0, 0, 12] });
     }
   });
 
@@ -2294,6 +2412,12 @@ function pptxProgressColor(pct) {
   return PPTX_HEX.warning;
 }
 
+function pptxProgressTint(pct) {
+  if (pct >= 100) return 'E3F7EF';
+  if (pct >= 50) return 'E7EEF4';
+  return 'FBF1E3';
+}
+
 function pptxParseDate(ddmmyyyy) {
   return reportParseDate(ddmmyyyy);
 }
@@ -2349,6 +2473,59 @@ function pptxGanttSection(pptx, header, W, H_, mainTitle, subtitle, rows, emptyM
       var barX = trackX + trackW * sf;
       var barW = Math.max(trackW * (ef - sf), 0.12);
       slide.addShape('roundRect', { x: barX, y: y + (rowH - 0.28) / 2, w: barW, h: 0.28, rectRadius: 0.05, fill: { color: pptxProgressColor(r.percent) }, line: { type: 'none' } });
+    });
+  }
+}
+
+/* Small box-by-box flow diagram slide(s) for the PPTX report -- one small
+   box per node (a task or a module, whichever the caller passes) in a
+   grid (perRow across, rowsPerSlide down), connected left-to-right by a
+   drawn connector line with an arrowhead (not a font glyph). When a row
+   wraps, a short down-then-right connector from the last box of that row
+   into the first box of the next row keeps the whole grid reading as one
+   continuous flow rather than several disconnected strips. Paginates onto
+   extra slides rather than shrinking below a readable size. nodes is
+   [{label, percent}], already in display order. */
+function pptxFlowChartSlide(pptx, header, W, H_, mainTitle, subtitle, nodes, emptyMsg) {
+  var perRow = 5, boxW = 1.85, boxH = 0.62, gapX = 0.4, rowGap = 0.45, rowsPerSlide = 4;
+  var perSlide = perRow * rowsPerSlide;
+  if (!nodes.length) {
+    var empty = pptx.addSlide({ masterName: 'SW_BASE' });
+    header(empty, mainTitle);
+    empty.addText(mainTitle, { x: 0.5, y: 0.7, w: 10, h: 0.5, bold: true, fontSize: 22, color: H_.navy, fontFace: 'Arial' });
+    empty.addText(emptyMsg, { x: 0.5, y: 1.6, w: 10, h: 0.4, color: H_.dim, fontFace: 'Arial' });
+    return;
+  }
+  for (var offset = 0; offset < nodes.length; offset += perSlide) {
+    var chunk = nodes.slice(offset, offset + perSlide);
+    var slide = pptx.addSlide({ masterName: 'SW_BASE' });
+    header(slide, mainTitle);
+    var pageSuffix = nodes.length > perSlide ? ' (' + (offset / perSlide + 1) + '/' + Math.ceil(nodes.length / perSlide) + ')' : '';
+    slide.addText(mainTitle + pageSuffix, { x: 0.5, y: 0.7, w: 10, h: 0.5, bold: true, fontSize: 22, color: H_.navy, fontFace: 'Arial' });
+    slide.addText(subtitle, { x: 0.5, y: 1.15, w: 10, h: 0.3, italic: true, fontSize: 9.5, color: H_.dim, fontFace: 'Arial' });
+    var startX = 0.5, startY = 1.65;
+    chunk.forEach(function(n, i) {
+      var col = i % perRow, row = Math.floor(i / perRow);
+      var x = startX + col * (boxW + gapX);
+      var y = startY + row * (boxH + rowGap);
+      var pct = n.percent != null ? n.percent : 0;
+      var color = pptxProgressColor(pct);
+      var label = (offset + i + 1) + '. ' + (n.label || '(untitled)');
+      slide.addShape('roundRect', { x: x, y: y, w: boxW, h: boxH, rectRadius: 0.06, fill: { color: pptxProgressTint(pct) }, line: { color: color, width: 1.25 }, shadow: { type: 'outer', color: '000000', opacity: 0.12, blur: 3, offset: 1, angle: 90 } });
+      slide.addShape('rect', { x: x, y: y, w: 0.07, h: boxH, fill: { color: color }, line: { type: 'none' } });
+      slide.addText(label, { x: x + 0.16, y: y + 0.04, w: boxW - 0.24, h: boxH - 0.26, fontSize: 7.5, color: H_.navy, fontFace: 'Arial', valign: 'top', shrinkText: true });
+      slide.addText(pct.toFixed(0) + '%', { x: x + 0.16, y: y + boxH - 0.24, w: boxW - 0.24, h: 0.2, fontSize: 7.5, bold: true, color: color, fontFace: 'Arial', align: 'right' });
+      if (col < perRow - 1 && i < chunk.length - 1) {
+        slide.addShape('line', { x: x + boxW, y: y + boxH / 2, w: gapX, h: 0, line: { color: H_.accent, width: 1.5, endArrowType: 'triangle' } });
+      } else if (col === perRow - 1 && i < chunk.length - 1) {
+        // Last box of a wrapped row -- drop straight down, then hand off
+        // to the first box of the next row with a short right-pointing
+        // arrow, so the reading order stays unambiguous.
+        var midY = y + boxH + rowGap / 2;
+        slide.addShape('line', { x: x + boxW / 2, y: y + boxH, w: 0, h: rowGap / 2, line: { color: H_.accent, width: 1.5 } });
+        slide.addShape('line', { x: startX, y: midY, w: x + boxW / 2 - startX, h: 0, line: { color: H_.accent, width: 1.5 } });
+        slide.addShape('line', { x: startX, y: midY, w: 0, h: rowGap / 2, line: { color: H_.accent, width: 1.5, endArrowType: 'triangle' } });
+      }
     });
   }
 }
@@ -2472,6 +2649,13 @@ function buildProjectReportPptx(data, logoDataUrl) {
       return { label: t.description || '(untitled task)', start: start, end: end, percent: t.percentage != null ? t.percentage : 0 };
     }).filter(function(r) { return r.start && r.end; });
     pptxGanttSection(pptx, header, W, H_, 'Module Gantt Chart -- ' + m.title, 'Task-level Target Start/End Date. Dashed line marks today.', taskRows, 'No Target Start/End Date data available for this module\'s tasks.');
+  });
+
+  // ---- Slide(s): Module Flow Charts (box-by-box task sequence, per module) ----
+  modules.forEach(function(m) {
+    var flowNodes = (data.tasks || []).filter(function(t) { return t.title === m.title; }).slice().sort(function(a, b) { return taskFlowSortKey(a) - taskFlowSortKey(b); })
+      .map(function(t) { return { label: stripLeadingNumber(t.description) || '(untitled task)', percent: t.percentage != null ? t.percentage : 0 }; });
+    pptxFlowChartSlide(pptx, header, W, H_, 'Module Flow Chart -- ' + m.title, 'Task sequence ordered by Target Start Date, each box colored by completion.', flowNodes, 'No tasks recorded for this module.');
   });
 
   // ---- Slide(s): Team Accountability ----

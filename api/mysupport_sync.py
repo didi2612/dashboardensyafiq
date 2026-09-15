@@ -51,7 +51,7 @@ CLIENT_SYNC_COLUMNS = ["client", "projek_id", "projek_name", "projek_status", "s
 def fetch_mysupport_tickets_df(conn=None):
     sql = """
         SELECT
-            c.name AS `Client`,
+            c.code AS `Client`,
             c.code AS `Company`,
             p.name AS `Project`,
             t.ticket_no AS `Ticket No`,
@@ -98,7 +98,7 @@ def fetch_mysupport_projects_df(conn=None):
     """
     sql = """
         SELECT
-            c.name AS `Client`,
+            c.code AS `Client`,
             p.name AS `Title`,
             p.name AS `Projek Name`,
             p.status AS `_status_code`
@@ -129,7 +129,7 @@ def fetch_mysupport_projects_df(conn=None):
 def fetch_mysupport_clients_df(conn=None):
     sql = """
         SELECT
-            c.name AS `Client`,
+            c.code AS `Client`,
             p.id AS `Projek ID`,
             p.name AS `Projek Name`,
             p.status AS `_status_code`

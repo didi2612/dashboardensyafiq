@@ -1890,8 +1890,12 @@ function reportProgressCell(pct) {
    resolved from whichever date pair the caller cares about). Returns an
    array of pdfmake content nodes (date-range header + the bar table) to
    splice into `content` with push.apply, since both the project-wide and
-   per-module charts need the exact same rendering. */
-function pdfGanttTable(rows) {
+   per-module charts need the exact same rendering. Pass {showDates: true}
+   to print each row's own Target Start -> Target End date range under its
+   label -- used for the task-level Module Gantt Charts, where the exact
+   dates aren't otherwise shown anywhere near the bar. */
+function pdfGanttTable(rows, opts) {
+  var showDates = !!(opts && opts.showDates);
   var gMin = new Date(Math.min.apply(null, rows.map(function(r) { return r.start.getTime(); })));
   var gMax = new Date(Math.max.apply(null, rows.map(function(r) { return r.end.getTime(); })));
   var gTotal = Math.max(gMax.getTime() - gMin.getTime(), 86400000);
@@ -1923,8 +1927,14 @@ function pdfGanttTable(rows) {
       var tx = trackW * todayFrac;
       canvasEls.push({ type: 'line', x1: tx, y1: -2, x2: tx, y2: trackH + 2, lineWidth: 1, lineColor: REPORT_BRAND.danger, dash: { length: 2 } });
     }
+    var labelCell = showDates
+      ? { stack: [
+          { text: r.label, bold: true, fontSize: 9 },
+          { text: r.start.toLocaleDateString('en-GB') + ' → ' + r.end.toLocaleDateString('en-GB'), fontSize: 7, italics: true, color: REPORT_BRAND.dim }
+        ] }
+      : { text: r.label, bold: true, fontSize: 9 };
     body.push([
-      { text: r.label, bold: true, fontSize: 9 },
+      labelCell,
       { canvas: canvasEls },
       { text: r.percent.toFixed(0) + '%', fontSize: 9, alignment: 'right' }
     ]);
@@ -2279,7 +2289,7 @@ function buildProjectReportDoc(data, logoDataUrl) {
     }).filter(function(r) { return r.start && r.end; });
     content.push({ text: m.title, style: 'h2', margin: [0, mi === 0 ? 0 : 16, 0, 4] });
     if (taskRows.length) {
-      content.push.apply(content, pdfGanttTable(taskRows));
+      content.push.apply(content, pdfGanttTable(taskRows, { showDates: true }));
     } else {
       content.push({ text: 'No Target Start/End Date data available for this module\'s tasks.', color: B.dim, margin: [0, 0, 0, 16] });
     }
@@ -2536,8 +2546,10 @@ function pptxParseDate(ddmmyyyy) {
    caller). Paginates onto multiple slides (maxPerSlide rows each) so a
    module with many tasks doesn't overflow one slide. Used for both the
    project-wide chart (one row per module) and the per-module charts (one
-   row per task). */
-function pptxGanttSection(pptx, header, W, H_, mainTitle, subtitle, rows, emptyMsg, maxPerSlide) {
+   row per task). Pass showDates=true to print each row's own Target
+   Start -> Target End date range under its label -- used for the
+   task-level Module Gantt Charts. */
+function pptxGanttSection(pptx, header, W, H_, mainTitle, subtitle, rows, emptyMsg, maxPerSlide, showDates) {
   maxPerSlide = maxPerSlide || 8;
   if (!rows.length) {
     var empty = pptx.addSlide({ masterName: 'SW_BASE' });
@@ -2575,7 +2587,13 @@ function pptxGanttSection(pptx, header, W, H_, mainTitle, subtitle, rows, emptyM
     }
     chunk.forEach(function(r, i) {
       var y = rowY + i * rowH;
-      slide.addText(r.label, { x: 0.5, y: y, w: trackX - 0.6, h: rowH - 0.1, valign: 'middle', bold: true, fontSize: 10.5, color: H_.navy, fontFace: 'Arial' });
+      if (showDates) {
+        slide.addText(r.label, { x: 0.5, y: y, w: trackX - 0.6, h: 0.32, valign: 'bottom', bold: true, fontSize: 10, color: H_.navy, fontFace: 'Arial' });
+        var dateStr = r.start.toLocaleDateString('en-GB') + ' → ' + r.end.toLocaleDateString('en-GB');
+        slide.addText(dateStr, { x: 0.5, y: y + 0.32, w: trackX - 0.6, h: 0.22, valign: 'top', italic: true, fontSize: 7.5, color: H_.dim, fontFace: 'Arial' });
+      } else {
+        slide.addText(r.label, { x: 0.5, y: y, w: trackX - 0.6, h: rowH - 0.1, valign: 'middle', bold: true, fontSize: 10.5, color: H_.navy, fontFace: 'Arial' });
+      }
       slide.addShape('roundRect', { x: trackX, y: y + (rowH - 0.28) / 2, w: trackW, h: 0.28, rectRadius: 0.05, fill: { color: H_.panel }, line: { type: 'none' } });
       var sf = Math.max(0, Math.min(1, (r.start.getTime() - minDate.getTime()) / totalMs));
       var ef = Math.max(0, Math.min(1, (r.end.getTime() - minDate.getTime()) / totalMs));
@@ -2813,7 +2831,7 @@ function buildProjectReportPptx(data, logoDataUrl) {
       if (start && (!end || end.getTime() === start.getTime())) end = new Date(start.getTime() + 86400000);
       return { label: t.description || '(untitled task)', start: start, end: end, percent: t.percentage != null ? t.percentage : 0 };
     }).filter(function(r) { return r.start && r.end; });
-    pptxGanttSection(pptx, header, W, H_, 'Module Gantt Chart -- ' + m.title, 'Task-level Target Start/End Date. Dashed line marks today.', taskRows, 'No Target Start/End Date data available for this module\'s tasks.');
+    pptxGanttSection(pptx, header, W, H_, 'Module Gantt Chart -- ' + m.title, 'Task-level Target Start/End Date. Dashed line marks today.', taskRows, 'No Target Start/End Date data available for this module\'s tasks.', undefined, true);
   });
 
   // ---- Slide(s): Module Flow Charts (box-by-box task sequence, per module) ----

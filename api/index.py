@@ -1984,18 +1984,13 @@ def api_sync_mysupport():
         # not map onto without picking a source for those rows (tasks?
         # progress?) that hasn't been decided yet.
 
-        try:
-            clients_df = mysupport_sync.fetch_mysupport_clients_df(conn=mysupport_conn)
-            ins, upd = db.upsert_clients(
-                clients_df, conn=request_conn(), sync_columns=mysupport_sync.CLIENT_SYNC_COLUMNS,
-            )
-            request_conn().commit()
-            summary["clients_inserted"] += ins
-            summary["clients_updated"] += upd
-        except Exception as e:
-            request_conn().rollback()
-            log(f"mysupport sync: clients failed: {e}", "ERROR")
-            summary["errors"].append(f"clients: {str(e)[:300]}")
+        # NOTE: syncing into Postgres `clients` is also intentionally
+        # disabled -- see the comment on mysupport_sync.fetch_mysupport_clients_df().
+        # It's a small, manually-curated set of Development/Warranty/
+        # Maintenance engagement rows per client, not a raw project catalog;
+        # this used to insert one row per mysupport project (15+ per client)
+        # and every one of them displayed that client's *entire* ticket
+        # total on the Home page, making totals look wildly inflated.
     finally:
         mysupport_conn.close()
 

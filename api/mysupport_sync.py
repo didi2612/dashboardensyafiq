@@ -127,6 +127,18 @@ def fetch_mysupport_projects_df(conn=None):
 
 
 def fetch_mysupport_clients_df(conn=None):
+    """NOT wired into /api/sync_mysupport -- see that route for why.
+
+    Postgres `clients` is a small, manually-curated set of Development/
+    Warranty/Maintenance engagement rows per client (e.g. FRIM has one:
+    "FRIMSAGA001" / "SAGA FRIM" / Maintenance), not a raw project catalog.
+    mysupport's `projects` table is one row per project (FRIM alone has
+    15), so upserting it here inserted 15+ duplicate rows per client, each
+    displaying that client's *entire* ticket total on the Home page --
+    which is what made totals look wildly inflated there. Left in place
+    (correctly built, verified against the live DB) in case a *subset* or
+    *aggregated* form of this data turns out to be useful later.
+    """
     sql = """
         SELECT
             c.code AS `Client`,

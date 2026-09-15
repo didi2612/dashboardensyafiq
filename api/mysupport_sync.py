@@ -43,6 +43,11 @@ TICKET_SYNC_COLUMNS = [
     "client", "company", "project", "ticket_title", "ticket_detail",
     "ticket_category", "ticket_created_date", "ticket_completed_date",
     "ticket_closed_date", "ticket_status", "source_file",
+    # "task_type" deliberately excluded -- fetch_mysupport_tickets_df()
+    # still sets a "Maintenance" default in the DataFrame, but leaving it
+    # out of the *update* set here means that default only ever applies
+    # to a ticket's initial INSERT, never overwrites a value someone has
+    # since hand-tagged on an existing row.
 ]
 PROJECT_SYNC_COLUMNS = ["client", "title", "projek_name", "status_progress", "source_file"]
 CLIENT_SYNC_COLUMNS = ["client", "projek_id", "projek_name", "projek_status", "source_file"]
@@ -80,6 +85,13 @@ def fetch_mysupport_tickets_df(conn=None):
     df["Ticket Category"] = df["_category_code"].map(TICKET_CATEGORY_BY_CODE)
     df["Ticket Status"] = df["_status_code"].map(TICKET_STATUS_BY_CODE)
     df["Source File"] = "mysupport-sync"
+    # mysupport IS the maintenance-phase support system, so every ticket
+    # coming through it defaults to Task Type = Maintenance. Only applied
+    # to brand-new tickets, though -- "task_type" is deliberately left out
+    # of TICKET_SYNC_COLUMNS below, so a ticket someone has already
+    # hand-tagged (e.g. as "Daily") never gets silently overwritten back
+    # to this default on a later sync.
+    df["Task Type"] = "Maintenance"
     return df.drop(columns=["_category_code", "_status_code"])
 
 

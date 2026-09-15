@@ -1930,7 +1930,7 @@ function pdfGanttTable(rows, opts) {
     var labelCell = showDates
       ? { stack: [
           { text: r.label, bold: true, fontSize: 9 },
-          { text: r.start.toLocaleDateString('en-GB') + ' → ' + r.end.toLocaleDateString('en-GB'), fontSize: 7, italics: true, color: REPORT_BRAND.dim }
+          { text: r.start.toLocaleDateString('en-GB') + ' - ' + r.end.toLocaleDateString('en-GB'), fontSize: 7, italics: true, color: REPORT_BRAND.dim }
         ] }
       : { text: r.label, bold: true, fontSize: 9 };
     body.push([
@@ -1976,10 +1976,10 @@ function progressTint(pct) {
    sequence continuing into the next row, so a multi-row chart still reads
    as one single flow rather than several disconnected strips. Kept
    deliberately compact -- small boxes, small type -- rather than a full
-   diagramming-library flowchart. nodes is [{label, percent}], already in
-   display order. */
+   diagramming-library flowchart. nodes is [{label, percent, start, end}]
+   (start/end are optional Date objects), already in display order. */
 function pdfFlowChart(nodes) {
-  var perRow = 5, boxW = 84, boxH = 36, arrowW = 20;
+  var perRow = 5, boxW = 84, boxH = 44, arrowW = 20;
   var out = [];
   for (var i = 0; i < nodes.length; i += perRow) {
     var chunk = nodes.slice(i, i + perRow);
@@ -1989,6 +1989,9 @@ function pdfFlowChart(nodes) {
       var color = progressColor(pct);
       var label = n.label || '(untitled)';
       if (label.length > 42) label = label.slice(0, 41) + '...';
+      var dateText = (n.start && n.end)
+        ? [{ text: '\n' + n.start.toLocaleDateString('en-GB') + ' - ' + n.end.toLocaleDateString('en-GB'), fontSize: 6.5, italics: true, color: REPORT_BRAND.dim }]
+        : [];
       cols.push({
         width: boxW,
         table: {
@@ -1997,9 +2000,10 @@ function pdfFlowChart(nodes) {
           body: [[ {
             text: [
               { text: (i + idx + 1) + '. ', bold: true, fontSize: 7.5, color: color },
-              { text: label, fontSize: 7.5, color: '#1a1a1a' },
+              { text: label, fontSize: 7.5, color: '#1a1a1a' }
+            ].concat(dateText).concat([
               { text: '\n' + pct.toFixed(0) + '%', fontSize: 8, bold: true, color: color }
-            ],
+            ]),
             fillColor: progressTint(pct),
             alignment: 'center'
           } ]]
@@ -2299,7 +2303,7 @@ function buildProjectReportDoc(data, logoDataUrl) {
   content.push({ text: 'Task sequence per module, ordered by Target Start Date, each box colored by completion.', style: 'note', margin: [0, 0, 0, 8] });
   (data.modules || []).forEach(function(m, mi) {
     var flowNodes = (data.tasks || []).filter(function(t) { return t.title === m.title; }).slice().sort(function(a, b) { return taskFlowSortKey(a) - taskFlowSortKey(b); })
-      .map(function(t) { return { label: stripLeadingNumber(t.description) || '(untitled task)', percent: t.percentage != null ? t.percentage : 0 }; });
+      .map(function(t) { return { label: stripLeadingNumber(t.description) || '(untitled task)', percent: t.percentage != null ? t.percentage : 0, start: reportParseDate(t.target_start), end: reportParseDate(t.target_end) }; });
     content.push({ text: m.title, style: 'h2', margin: [0, mi === 0 ? 0 : 16, 0, 6] });
     if (flowNodes.length) {
       content.push.apply(content, pdfFlowChart(flowNodes));
@@ -2589,7 +2593,7 @@ function pptxGanttSection(pptx, header, W, H_, mainTitle, subtitle, rows, emptyM
       var y = rowY + i * rowH;
       if (showDates) {
         slide.addText(r.label, { x: 0.5, y: y, w: trackX - 0.6, h: 0.32, valign: 'bottom', bold: true, fontSize: 10, color: H_.navy, fontFace: 'Arial' });
-        var dateStr = r.start.toLocaleDateString('en-GB') + ' → ' + r.end.toLocaleDateString('en-GB');
+        var dateStr = r.start.toLocaleDateString('en-GB') + ' - ' + r.end.toLocaleDateString('en-GB');
         slide.addText(dateStr, { x: 0.5, y: y + 0.32, w: trackX - 0.6, h: 0.22, valign: 'top', italic: true, fontSize: 7.5, color: H_.dim, fontFace: 'Arial' });
       } else {
         slide.addText(r.label, { x: 0.5, y: y, w: trackX - 0.6, h: rowH - 0.1, valign: 'middle', bold: true, fontSize: 10.5, color: H_.navy, fontFace: 'Arial' });
@@ -2612,9 +2616,10 @@ function pptxGanttSection(pptx, header, W, H_, mainTitle, subtitle, rows, emptyM
    into the first box of the next row keeps the whole grid reading as one
    continuous flow rather than several disconnected strips. Paginates onto
    extra slides rather than shrinking below a readable size. nodes is
-   [{label, percent}], already in display order. */
+   [{label, percent, start, end}] (start/end are optional Date objects),
+   already in display order. */
 function pptxFlowChartSlide(pptx, header, W, H_, mainTitle, subtitle, nodes, emptyMsg) {
-  var perRow = 5, boxW = 1.85, boxH = 0.62, gapX = 0.4, rowGap = 0.45, rowsPerSlide = 4;
+  var perRow = 5, boxW = 1.85, boxH = 0.8, gapX = 0.4, rowGap = 0.45, rowsPerSlide = 4;
   var perSlide = perRow * rowsPerSlide;
   if (!nodes.length) {
     var empty = pptx.addSlide({ masterName: 'SW_BASE' });
@@ -2638,9 +2643,13 @@ function pptxFlowChartSlide(pptx, header, W, H_, mainTitle, subtitle, nodes, emp
       var pct = n.percent != null ? n.percent : 0;
       var color = pptxProgressColor(pct);
       var label = (offset + i + 1) + '. ' + (n.label || '(untitled)');
+      var dateStr = (n.start && n.end) ? (n.start.toLocaleDateString('en-GB') + ' - ' + n.end.toLocaleDateString('en-GB')) : '';
       slide.addShape('roundRect', { x: x, y: y, w: boxW, h: boxH, rectRadius: 0.06, fill: { color: pptxProgressTint(pct) }, line: { color: color, width: 1.25 }, shadow: { type: 'outer', color: '000000', opacity: 0.12, blur: 3, offset: 1, angle: 90 } });
       slide.addShape('rect', { x: x, y: y, w: 0.07, h: boxH, fill: { color: color }, line: { type: 'none' } });
-      slide.addText(label, { x: x + 0.16, y: y + 0.04, w: boxW - 0.24, h: boxH - 0.26, fontSize: 7.5, color: H_.navy, fontFace: 'Arial', valign: 'top', shrinkText: true });
+      slide.addText(label, { x: x + 0.16, y: y + 0.04, w: boxW - 0.24, h: boxH - 0.44, fontSize: 7.5, color: H_.navy, fontFace: 'Arial', valign: 'top', shrinkText: true });
+      if (dateStr) {
+        slide.addText(dateStr, { x: x + 0.16, y: y + boxH - 0.42, w: boxW - 0.24, h: 0.18, fontSize: 6.5, italic: true, color: H_.dim, fontFace: 'Arial', valign: 'top' });
+      }
       slide.addText(pct.toFixed(0) + '%', { x: x + 0.16, y: y + boxH - 0.24, w: boxW - 0.24, h: 0.2, fontSize: 7.5, bold: true, color: color, fontFace: 'Arial', align: 'right' });
       if (col < perRow - 1 && i < chunk.length - 1) {
         slide.addShape('line', { x: x + boxW, y: y + boxH / 2, w: gapX, h: 0, line: { color: H_.accent, width: 1.5, endArrowType: 'triangle' } });
@@ -2837,7 +2846,7 @@ function buildProjectReportPptx(data, logoDataUrl) {
   // ---- Slide(s): Module Flow Charts (box-by-box task sequence, per module) ----
   modules.forEach(function(m) {
     var flowNodes = (data.tasks || []).filter(function(t) { return t.title === m.title; }).slice().sort(function(a, b) { return taskFlowSortKey(a) - taskFlowSortKey(b); })
-      .map(function(t) { return { label: stripLeadingNumber(t.description) || '(untitled task)', percent: t.percentage != null ? t.percentage : 0 }; });
+      .map(function(t) { return { label: stripLeadingNumber(t.description) || '(untitled task)', percent: t.percentage != null ? t.percentage : 0, start: pptxParseDate(t.target_start), end: pptxParseDate(t.target_end) }; });
     pptxFlowChartSlide(pptx, header, W, H_, 'Module Flow Chart -- ' + m.title, 'Task sequence ordered by Target Start Date, each box colored by completion.', flowNodes, 'No tasks recorded for this module.');
   });
 

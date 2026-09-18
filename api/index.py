@@ -949,6 +949,29 @@ def build_ticket_report_data(client, category):
         pc = df["Priority"].dropna().value_counts()
         priority_counts = [{"priority": k, "count": int(v)} for k, v in pc.items()]
 
+    # Per-project breakdown -- a client can run tickets against more than
+    # one project (e.g. LKTN's Payroll/Claim/Asset modules each raise their
+    # own tickets), so a flat client-wide total hides which project is
+    # actually driving the ticket load. Sorted by open-ticket count (same
+    # rule build_overall_client_charts uses for its client ranking) so the
+    # project needing the most attention sorts to the top.
+    project_counts = []
+    if "Project" in df.columns:
+        for project, pdf_ in df.groupby(df["Project"].fillna("(No Project)")):
+            statuses = pdf_["Ticket Status"] if "Ticket Status" in pdf_.columns else pd.Series(dtype=object)
+            p_completed = int(statuses.isin(["Completed", "Closed"]).sum())
+            p_pending = int((statuses == "Pending").sum())
+            p_in_progress = int((statuses == "In Progress").sum())
+            project_counts.append({
+                "project": str(project),
+                "total": int(len(pdf_)),
+                "completed": p_completed,
+                "pending": p_pending,
+                "in_progress": p_in_progress,
+                "sla_breach": int(pdf_["SLA Breach"].sum()) if "SLA Breach" in pdf_.columns else 0,
+            })
+        project_counts.sort(key=lambda p: p["pending"] + p["in_progress"], reverse=True)
+
     def ticket_entry(row):
         return {
             "ticket_no": row.get("Ticket No") if pd.notna(row.get("Ticket No")) else "",
@@ -1017,6 +1040,7 @@ def build_ticket_report_data(client, category):
         "metrics": metrics,
         "status_counts": status_counts,
         "priority_counts": priority_counts,
+        "project_counts": project_counts,
         "tickets": tickets,
         "resolution": {
             "avg_days": avg_days,

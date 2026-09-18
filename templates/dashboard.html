@@ -3156,6 +3156,25 @@ function buildTicketReportDoc(data, logoDataUrl) {
   if (!(data.priority_counts || []).length) priorityRows.push([{ text: 'No priority data available.', colSpan: 2, color: B.dim }, {}]);
   content.push({ table: { headerRows: 1, widths: ['*', 80], body: priorityRows }, layout: formalTableLayout(), margin: [0, 4, 0, 20] });
 
+  content.push({ text: 'Tickets by Project', style: 'h2' });
+  content.push({ text: 'Sorted by open ticket count (Pending + In Progress), so the project needing the most attention sorts to the top.', style: 'note', margin: [0, 0, 0, 6] });
+  var projRows = [[
+    { text: 'Project', style: 'th' }, { text: 'Total', style: 'th' }, { text: 'Completed', style: 'th' },
+    { text: 'Pending', style: 'th' }, { text: 'In Progress', style: 'th' }, { text: 'SLA Breaches', style: 'th' }
+  ]];
+  (data.project_counts || []).forEach(function(p) {
+    projRows.push([
+      { text: p.project, bold: true },
+      { text: String(p.total), alignment: 'center' },
+      { text: String(p.completed), alignment: 'center', color: B.success },
+      { text: String(p.pending), alignment: 'center', color: B.warning },
+      { text: String(p.in_progress), alignment: 'center', color: B.accent },
+      { text: String(p.sla_breach), alignment: 'center', color: p.sla_breach > 0 ? B.danger : undefined, bold: p.sla_breach > 0 }
+    ]);
+  });
+  if (!(data.project_counts || []).length) projRows.push([{ text: 'No project data available.', colSpan: 6, color: B.dim }, {}, {}, {}, {}, {}]);
+  content.push({ table: { headerRows: 1, widths: ['*', 45, 65, 55, 70, 75], body: projRows }, layout: formalTableLayout(), fontSize: 9, margin: [0, 4, 0, 20] });
+
   content.push({ text: 'Ticket Analytics', style: 'h1', pageBreak: 'before' });
   content.push({ text: 'Monthly Trend', style: 'h2' });
   content.push({ text: 'Tickets raised vs. resolved per calendar month.', style: 'note', margin: [0, 0, 0, 6] });
@@ -3507,6 +3526,17 @@ function buildTicketReportPptx(data, logoDataUrl) {
   if ((data.priority_counts || []).length) {
     statusSlide.addTable(priorityRows, { x: 6.5, y: 1.4, w: 5.5, colW: [3.7, 1.8], fontSize: 10, border: { type: 'solid', color: H_.border, pt: 0.75 } });
   }
+
+  // ---- Slide: Tickets by Project ----
+  var projectCols = [
+    { key: 'project', label: 'Project', w: 0.32 },
+    { key: 'total', label: 'Total', w: 0.13, align: 'center' },
+    { key: 'completed', label: 'Completed', w: 0.15, align: 'center', color: function() { return H_.success; } },
+    { key: 'pending', label: 'Pending', w: 0.13, align: 'center', color: function() { return H_.warning; } },
+    { key: 'in_progress', label: 'In Progress', w: 0.15, align: 'center', color: function() { return H_.accent; } },
+    { key: 'sla_breach', label: 'SLA Breaches', w: 0.12, align: 'center', color: function(it) { return it.sla_breach > 0 ? H_.danger : H_.navy; }, bold: true }
+  ];
+  pptxTicketTableSlide(pptx, header, W, H_, 'Tickets by Project', 'Sorted by open ticket count (Pending + In Progress), so the project needing the most attention sorts to the top.', data.project_counts || [], projectCols, 'No project data available.');
 
   // ---- Slide(s): Ticket Details (full list) ----
   var ticketCols = [

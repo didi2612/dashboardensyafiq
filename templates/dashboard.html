@@ -3067,6 +3067,19 @@ function pdfCountBar(count, maxCount, color) {
   };
 }
 
+/* Blends a hex color toward white by (1 - intensity) -- used as a light
+   heatmap tint behind a pivot-table cell's number (0 = white, 1 = full
+   color), so the Monthly Trend by Project table reads at a glance without
+   needing an actual chart per project. */
+function shadeColor(hex, intensity) {
+  intensity = Math.max(0, Math.min(1, intensity));
+  var n = parseInt(hex.replace('#', ''), 16);
+  var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  var mix = function(c) { return Math.round(255 + (c - 255) * (0.15 + intensity * 0.55)); };
+  var toHex = function(c) { return mix(c).toString(16).padStart(2, '0'); };
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+
 function ticketReportFileName(data, ext) {
   var parts = [data.client, data.category, 'Status_Report'].filter(Boolean);
   return parts.join('_').replace(/[^a-z0-9_\-]+/gi, '_') + '.' + ext;
@@ -3197,6 +3210,36 @@ function buildTicketReportDoc(data, logoDataUrl) {
     content.push({ table: { headerRows: 1, widths: [70, '*', '*'], body: trendRows }, layout: formalTableLayout(), margin: [0, 0, 0, 20] });
   } else {
     content.push({ text: 'No dated tickets available to chart.', color: B.dim, margin: [0, 0, 0, 20] });
+  }
+
+  content.push({ text: 'Monthly Trend by Project', style: 'h2' });
+  content.push({ text: 'Tickets raised per month, per project. Capped to the top ' + 6 + ' projects by ticket volume, with the rest grouped into "Other".', style: 'note', margin: [0, 0, 0, 6] });
+  var byProject = data.monthly_trend_by_project || [];
+  if (byProject.length && trend.length) {
+    var byProjMax = Math.max.apply(null, byProject.map(function(s) { return Math.max.apply(null, s.points.map(function(pt) { return pt.created; }).concat([0])); }).concat([1]));
+    var projHeader = [{ text: 'Month', style: 'th' }].concat(byProject.map(function(s) { return { text: s.project, style: 'th', fontSize: 7.5 }; }));
+    var projPivotRows = [projHeader];
+    trend.forEach(function(t, i) {
+      var row = [{ text: t.label, bold: true, fontSize: 8 }];
+      byProject.forEach(function(s) {
+        var count = s.points[i] ? s.points[i].created : 0;
+        var intensity = byProjMax > 0 ? count / byProjMax : 0;
+        row.push({ text: String(count), alignment: 'center', fontSize: 8, bold: count > 0, color: count > 0 ? B.navy : B.dim, fillColor: count > 0 ? shadeColor(B.accent, intensity) : undefined });
+      });
+      projPivotRows.push(row);
+    });
+    content.push({
+      table: { headerRows: 1, widths: [55].concat(byProject.map(function() { return '*'; })), body: projPivotRows },
+      layout: {
+        hLineWidth: function() { return 0.5; }, vLineWidth: function() { return 0.5; },
+        hLineColor: function() { return '#b9c4d0'; }, vLineColor: function() { return '#b9c4d0'; },
+        paddingLeft: function() { return 3; }, paddingRight: function() { return 3; },
+        paddingTop: function() { return 3; }, paddingBottom: function() { return 3; }
+      },
+      margin: [0, 0, 0, 20]
+    });
+  } else {
+    content.push({ text: 'No project-dated tickets available to chart.', color: B.dim, margin: [0, 0, 0, 20] });
   }
 
   content.push({ text: 'Open Ticket Ageing', style: 'h2' });
@@ -3488,6 +3531,29 @@ function buildTicketReportPptx(data, logoDataUrl) {
     });
   } else {
     trendSlide.addText('No dated tickets available to chart.', { x: 0.5, y: 2.0, w: 10, h: 0.4, color: H_.dim, fontFace: 'Arial' });
+  }
+
+  // ---- Slide: Monthly Trend by Project ----
+  var byProject = data.monthly_trend_by_project || [];
+  var projTrendSlide = pptx.addSlide({ masterName: 'SW_BASE' });
+  header(projTrendSlide);
+  projTrendSlide.addText('Monthly Trend by Project', { x: 0.5, y: 0.7, w: 10, h: 0.5, bold: true, fontSize: 22, color: H_.navy, fontFace: 'Arial' });
+  projTrendSlide.addText('Tickets raised per month, per project. Capped to the top 6 projects by ticket volume, with the rest grouped into "Other".', { x: 0.5, y: 1.2, w: W - 1, h: 0.35, italic: true, fontSize: 9.5, color: H_.dim, fontFace: 'Arial' });
+  if (byProject.length && trend.length) {
+    var projPalette = [H_.accent, H_.success, H_.warning, H_.danger, H_.teal, H_.navy, H_.dim];
+    projTrendSlide.addChart('line', byProject.map(function(s, i) {
+      return { name: s.project, labels: s.points.map(function(pt) { return pt.label; }), values: s.points.map(function(pt) { return pt.created; }) };
+    }), {
+      x: 0.5, y: 1.7, w: W - 1, h: H - 2.4,
+      chartColors: byProject.map(function(s, i) { return s.project === 'Other' ? H_.dim : projPalette[i % projPalette.length]; }),
+      lineSize: 2, lineDataSymbol: 'none',
+      showLegend: true, legendPos: 'b', legendFontSize: 9,
+      showTitle: false, catAxisLabelColor: H_.dim, valAxisLabelColor: H_.dim,
+      catAxisLabelFontSize: 7, valAxisLabelFontSize: 9,
+      catAxisLabelRotate: 45
+    });
+  } else {
+    projTrendSlide.addText('No project-dated tickets available to chart.', { x: 0.5, y: 2.0, w: 10, h: 0.4, color: H_.dim, fontFace: 'Arial' });
   }
 
   // ---- Slide: Open Ticket Ageing ----

@@ -1033,6 +1033,29 @@ def build_ticket_report_data(client, category):
                 "completed": int(completed_by_month.get(period, 0)),
             })
 
+    # Monthly trend broken down by project (tickets raised per month, one
+    # series per project) -- capped to the top few projects by ticket
+    # volume (project_counts is already sorted, just by open count instead,
+    # so re-sort by total here) and the rest folded into "Other", the same
+    # "don't let a long tail make the chart unreadable" rule a chart
+    # library's own top-N grouping would apply. A project with only a
+    # handful of tickets barely shows up on a monthly chart anyway.
+    monthly_trend_by_project = []
+    if "Project" in df.columns and "Ticket Created Date" in df.columns and all_months:
+        MAX_PROJECT_SERIES = 6
+        ranked_projects = sorted(project_counts, key=lambda p: p["total"], reverse=True)
+        top_projects = {p["project"] for p in ranked_projects[:MAX_PROJECT_SERIES]}
+        pdf_ = df.copy()
+        pdf_["_report_project"] = pdf_["Project"].fillna("(No Project)").astype(str)
+        pdf_["_report_project"] = pdf_["_report_project"].where(pdf_["_report_project"].isin(top_projects), "Other")
+        for project, group in pdf_.groupby("_report_project"):
+            created_pm = group["Ticket Created Date"].dropna().dt.to_period("M").value_counts()
+            points = [{"month": str(p), "label": p.strftime("%b %Y"), "created": int(created_pm.get(p, 0))} for p in all_months]
+            monthly_trend_by_project.append({"project": project, "points": points})
+        # "Other" (if present) always last regardless of its volume -- it's
+        # a catch-all bucket, not a project competing for rank.
+        monthly_trend_by_project.sort(key=lambda s: (s["project"] == "Other", -sum(pt["created"] for pt in s["points"])))
+
     return {
         "client": client,
         "category": category,
@@ -1049,6 +1072,7 @@ def build_ticket_report_data(client, category):
         },
         "ageing_buckets": ageing_buckets,
         "monthly_trend": monthly_trend,
+        "monthly_trend_by_project": monthly_trend_by_project,
         "attention": {
             "open_tickets": open_tickets,
             "sla_breaches": sla_breaches,
